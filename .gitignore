@@ -1,0 +1,6 @@
+# Local/generated evidence
+*.tmp
+*.log
+.cache/
+.out/
+frames/

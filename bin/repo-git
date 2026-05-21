@@ -1,0 +1,149 @@
+#!/usr/bin/env sh
+set -eu
+
+usage() {
+  cat >&2 <<'EOF'
+usage: repo-git MODE [ROOT]
+
+Modes:
+  status    emit #GitState from git status
+  summary   same as status, intended for compact turn context
+  diff      emit #GitState plus raw unstaged diff
+  staged    emit #GitState plus raw staged diff
+  semantic  emit #GitState plus optional sem diff evidence when available
+
+Output:
+  JSON shaped as #GitState.
+EOF
+}
+
+json_string() {
+  # JSON string encoder for shell-provided values.
+  printf '%s' "$1" | awk '
+    BEGIN { ORS = ""; first = 1 }
+    {
+      gsub(/\\/, "\\\\")
+      gsub(/"/, "\\\"")
+      gsub(/	/, "\\t")
+      if (!first) printf "\\n"
+      printf "%s", $0
+      first = 0
+    }
+  '
+}
+
+fail() {
+  printf 'repo-git: %s\n' "$1" >&2
+  exit 2
+}
+
+status_name() {
+  case "$1" in
+    A*) printf added ;;
+    M*) printf modified ;;
+    D*) printf deleted ;;
+    R*) printf renamed ;;
+    *A) printf added ;;
+    *M) printf modified ;;
+    *D) printf deleted ;;
+    *R) printf renamed ;;
+    *)  printf unknown ;;
+  esac
+}
+
+emit_git_state() {
+  mode=$1
+  root=$2
+
+  head=$(git -C "$root" rev-parse --short HEAD 2>/dev/null || true)
+  branch=$(git -C "$root" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+  porcelain=$(git -C "$root" status --porcelain=v1 2>/dev/null || true)
+
+  clean=true
+  [ -z "$porcelain" ] || clean=false
+
+  printf '{'
+  [ -z "$head" ] || printf '"head":"%s",' "$(json_string "$head")"
+  [ -z "$branch" ] || printf '"branch":"%s",' "$(json_string "$branch")"
+  printf '"clean":%s,' "$clean"
+
+  printf '"changed":['
+  changed_count=0
+  printf '%s\n' "$porcelain" | while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    code=$(printf '%s' "$line" | cut -c1-2)
+    path=$(printf '%s' "$line" | cut -c4-)
+
+    case "$code" in
+      '??') continue ;;
+    esac
+
+    case "$path" in
+      *' -> '*) path=${path##* -> } ;;
+    esac
+
+    status=$(status_name "$code")
+    if [ "$changed_count" -gt 0 ]; then printf ','; fi
+    printf '{"path":"%s","status":"%s"}' "$(json_string "$path")" "$status"
+    changed_count=$((changed_count + 1))
+  done
+  printf '],'
+
+  printf '"untracked":['
+  untracked_count=0
+  printf '%s\n' "$porcelain" | while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    code=$(printf '%s' "$line" | cut -c1-2)
+    [ "$code" = '??' ] || continue
+    path=$(printf '%s' "$line" | cut -c4-)
+    if [ "$untracked_count" -gt 0 ]; then printf ','; fi
+    printf '"%s"' "$(json_string "$path")"
+    untracked_count=$((untracked_count + 1))
+  done
+  printf ']'
+
+  case "$mode" in
+    diff)
+      raw=$(git -C "$root" diff --no-ext-diff -- 2>/dev/null || true)
+      printf ',"diff":{"unstaged":"%s"}' "$(json_string "$raw")"
+      ;;
+    staged)
+      raw=$(git -C "$root" diff --cached --no-ext-diff -- 2>/dev/null || true)
+      printf ',"diff":{"staged":"%s"}' "$(json_string "$raw")"
+      ;;
+    semantic)
+      semantic_raw=''
+      if command -v sem >/dev/null 2>&1; then
+        semantic_raw=$(cd "$root" && sem diff --json 2>/dev/null || sem diff 2>/dev/null || true)
+      fi
+      printf ',"semantic":{"changedEntities":[],"blastRadius":[]'
+      [ -z "$semantic_raw" ] || printf ',"raw":"%s"' "$(json_string "$semantic_raw")"
+      printf '}'
+      ;;
+  esac
+
+  printf '}\n'
+}
+
+[ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ] && { usage; exit 0; }
+[ "$#" -ge 1 ] || { usage; exit 2; }
+
+mode=$1
+root=${2:-.}
+
+case "$mode" in
+  status|summary|diff|staged|semantic) ;;
+  *) fail "mode must be status, summary, diff, staged, or semantic" ;;
+esac
+
+command -v git >/dev/null 2>&1 || fail "git not found"
+root=$(cd "$root" 2>/dev/null && pwd -P) || fail "root does not exist"
+[ "$root" != "/" ] || fail "refusing to run from /"
+if [ -n "${HOME:-}" ] && [ "$root" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ]; then
+  fail "refusing to run from HOME directly; use a repo root"
+fi
+
+git -C "$root" rev-parse --show-toplevel >/dev/null 2>&1 || fail "not inside a git repository"
+root=$(git -C "$root" rev-parse --show-toplevel)
+
+emit_git_state "$mode" "$root"
