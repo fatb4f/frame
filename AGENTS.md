@@ -44,6 +44,31 @@ on repository state, current changes, or bounded search evidence.
    PATH="$PWD/bin:$PATH" repo-frame . "$USER_GOAL" '#RepoState' literal 20
    ```
 
+## Plan And Gate Contract
+
+Do not extend Codex's native `update_plan` schema. Treat it as the human-visible
+status rail only: step text plus pending, in-progress, or completed status.
+
+Do not parse `PlanDelta` streaming text as canonical. The completed native plan
+item is the only native plan text worth binding to.
+
+Do not add dynamic tools, MCP servers, daemons, or new runtime tool registries
+for plan validation.
+
+For semantic plan validation, use this side-rail flow:
+
+```txt
+normalize native plan
+-> bind sidecar to native step identity
+-> validate sidecar with CUE
+-> run evals/tests through stable shell adapters
+-> validate evidence with CUE
+```
+
+Native plan identity should be bound by stable fields such as turn id, step
+ordinal, completed step text, and a text hash. The sidecar owns semantic fields:
+reads, writes, symbols, protected impact, gates, and required evidence.
+
 ## Skill Routing
 
 Use these repo-local skills as explicit Codex routing hints:
@@ -61,6 +86,8 @@ only when the narrower evidence or validation surface is needed.
 - CUE is the authority plane for state, validation, selectors, and projections.
 - Shell scripts are adapters.
 - `repo-frame` composes observations into a CUE-projected turn frame.
+- Native `update_plan` remains narrow. Sidecar plan/evidence artifacts carry the
+  CUE-validatable semantics.
 - Do not add an agent loop, planner schema, MCP dependency, Go runtime, or broad
   framework layer.
 - Keep observations bounded to the current repository. Do not search `$HOME` or

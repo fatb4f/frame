@@ -13,12 +13,15 @@ package repo
 
 #RuntimePolicy: {
 	noMCP:          true
+	noDynamicTools: true
 	noGo:           true
 	noWriteTools:   true
 	noPatchTools:   true
 	noPlannerModel: true
 	noAgentLoop:    true
-	noPlanState:    true
+	noPlanLoop:     true
+	noPlanDeltaAsCanonical: true
+	noUpdatePlanExtension:  true
 
 	allowedAdapters: ["repo-rg", "repo-git", "repo-frame"]
 	allowedSkills:   ["repo-frame", "cue", "repo-search", "semantic-git"]

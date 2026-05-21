@@ -72,6 +72,28 @@ repo-frame . "$USER_GOAL" 'regex_pattern' regex 80
 5. After changing schemas, projections, or adapters, run the checks listed by
    the frame plus the verification commands below.
 
+## Native Plan Sidecar
+
+Do not extend `update_plan`.
+Do not parse `PlanDelta` as canonical.
+Do not add dynamic tools or MCP for plan validation.
+
+Use the native plan only as a status rail. When semantic validation is needed,
+bind a sidecar to the completed native plan steps:
+
+```txt
+native plan step text/status
+-> normalized native-plan artifact
+-> sidecar with reads/writes/symbols/protected impact/gates
+-> CUE plan gate
+-> eval/test evidence
+-> CUE evidence gate
+```
+
+Bind sidecar steps to native steps by turn id, ordinal, step text, and text hash.
+Run validation through stable shell adapters such as `plan-vet` and
+`evidence-vet` when those adapters exist.
+
 ## Verification
 
 ```sh
@@ -94,3 +116,4 @@ sh -n bin/repo-frame bin/repo-git bin/repo-rg
 - Current repository only; never `$HOME` or `/`.
 - CUE remains the authority. Shell scripts remain adapters.
 - Keep output bounded and inspectable.
+- Native plan status is not validation status.

@@ -74,6 +74,24 @@ semantic-git git and optional sem evidence through repo-git
 cue          schema, validation, projection, and examples
 ```
 
+Native planning stays native and narrow:
+
+```txt
+update_plan = step text + status
+sidecar     = CUE-validatable semantic contract
+```
+
+Do not extend `update_plan`, parse `PlanDelta` as canonical, or add dynamic
+tools/MCP for validation. The intended side-rail is:
+
+```txt
+normalize native plan
+-> bind sidecar to native step identity
+-> validate sidecar with CUE
+-> run evals/tests through stable shell adapters
+-> validate evidence with CUE
+```
+
 ## Usage
 
 ```sh
