@@ -1,43 +1,56 @@
-# repo-frame-slim
+# agent.cue slim
 
 Minimal repo-context surface for Codex/agent turns.
 
 ## Contract
 
 ```txt
-Adapters observe.
-CUE unifies.
-Views project.
-Policies validate.
-Agents consume.
-Evals judge.
+Keep it deletable.
+
+CUE = one repo state object + slim turn envelope + constraints + selectors
+git = semantic repo-change observation
+rg  = bounded text search observation
+
+No MCP.
+No Go.
+No agent-sdk repo.
+No framework.
+No skill zoo.
 ```
 
-Runtime surface:
+## Runtime graph
 
 ```txt
-repo-rg      -> bounded text-search evidence
-repo-git     -> git / optional semantic-git evidence
-cue          -> state unification, validation, selectors, views
-skills/*     -> Codex routing hints only
+repo-rg
+  -> emits bounded search evidence
+
+repo-git
+  -> emits git evidence and optional sem evidence
+
+cue
+  -> unifies evidence into #RepoState
+  -> validates constraints
+  -> projects views
+
+agent
+  -> consumes projected views
 ```
 
 ## Layout
 
 ```txt
-repo-frame-slim/
-  cue/
-    state.cue
-    constraints.cue
-    views.cue
-    cmd.cue
-  bin/
-    repo-rg
-    repo-git
-  skills/
-    cue/SKILL.md
-    repo-search/SKILL.md
-    semantic-git/SKILL.md
+agent.cue/
+  cue.mod/module.cue
+  cue/state.cue
+  cue/constraints.cue
+  cue/views.cue
+  cue/turn.cue
+  cue/cmd.cue
+  bin/repo-rg
+  bin/repo-git
+  skills/cue/SKILL.md
+  skills/repo-search/SKILL.md
+  skills/semantic-git/SKILL.md
 ```
 
 ## Usage
@@ -47,10 +60,72 @@ export PATH="$PWD/bin:$PATH"
 
 repo-git status .
 repo-git summary .
-repo-rg 'TODO' . literal 40
+repo-git diff .
+repo-git staged .
+repo-git semantic .
+
+repo-rg 'literal text' . literal 80
+repo-rg 'regex_pattern' . regex 80
 
 cue vet ./cue
-cue export ./cue -e '#RepoState'
+cue export ./cue -e '#RepoConstraints'
+cue export ./cue -e '#TurnContext'
+```
+
+## Refactor boundary
+
+Removed from the previous model:
+
+```txt
+schema/
+workflow.cue turn/sidecar model
+app-server protocol mirror
+MCP schema surface
+agent-sdk skill registry
+turn/app-server schemas as imported runtime authority
+source-repo upstream reference dumps
+generated openai.yaml skill metadata
+```
+
+Kept as runtime concepts only:
+
+```txt
+skills/cue
+skills/repo-search
+skills/semantic-git
+bin/repo-rg
+bin/repo-git
+cue/*
+```
+
+## Slim turn vocabulary
+
+The repo can name Codex runtime concepts without importing the full app-server schema surface.
+
+Kept as local CUE vocabulary:
+
+```txt
+#TurnContext
+#TurnItemSummary
+#TurnEvaluation
+#ReviewStart / #ReviewTarget
+#ExecCommandApproval
+#FileChangeRequestApproval
+```
+
+Ignored by design:
+
+```txt
+account/auth
+marketplace/plugins
+model lists
+MCP server management
+app lists
+Windows sandbox setup
+feedback upload
+realtime
+UI thread archive/name/list operations
+plan state
 ```
 
 ## Anti-sprawl invariant

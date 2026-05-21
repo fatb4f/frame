@@ -2,7 +2,7 @@
 set -eu
 
 usage() {
-  cat >&2 <<'EOF'
+  cat >&2 <<'USAGE'
 usage: repo-git MODE [ROOT]
 
 Modes:
@@ -14,17 +14,16 @@ Modes:
 
 Output:
   JSON shaped as #GitState.
-EOF
+USAGE
 }
 
 json_string() {
-  # JSON string encoder for shell-provided values.
   printf '%s' "$1" | awk '
     BEGIN { ORS = ""; first = 1 }
     {
       gsub(/\\/, "\\\\")
       gsub(/"/, "\\\"")
-      gsub(/	/, "\\t")
+      gsub(/\t/, "\\t")
       if (!first) printf "\\n"
       printf "%s", $0
       first = 0
@@ -35,6 +34,17 @@ json_string() {
 fail() {
   printf 'repo-git: %s\n' "$1" >&2
   exit 2
+}
+
+normalize_git_path() {
+  path=$1
+  case "$path" in
+    \"*\")
+      path=${path#\"}
+      path=${path%\"}
+      ;;
+  esac
+  printf '%s' "$path"
 }
 
 status_name() {
@@ -51,13 +61,41 @@ status_name() {
   esac
 }
 
+emit_changed() {
+  root=$1
+  git -C "$root" -c core.quotePath=false status --porcelain=v1 2>/dev/null | while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    code=$(printf '%s' "$line" | cut -c1-2)
+    [ "$code" != '??' ] || continue
+    path=$(printf '%s' "$line" | cut -c4-)
+    case "$path" in
+      *' -> '*) path=${path##* -> } ;;
+    esac
+    path=$(normalize_git_path "$path")
+    status=$(status_name "$code")
+    printf '%s\t%s\n' "$status" "$path"
+  done
+}
+
+emit_untracked() {
+  root=$1
+  git -C "$root" -c core.quotePath=false status --porcelain=v1 2>/dev/null | while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    code=$(printf '%s' "$line" | cut -c1-2)
+    [ "$code" = '??' ] || continue
+    path=$(printf '%s' "$line" | cut -c4-)
+    path=$(normalize_git_path "$path")
+    printf '%s\n' "$path"
+  done
+}
+
 emit_git_state() {
   mode=$1
   root=$2
 
   head=$(git -C "$root" rev-parse --short HEAD 2>/dev/null || true)
   branch=$(git -C "$root" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
-  porcelain=$(git -C "$root" status --porcelain=v1 2>/dev/null || true)
+  porcelain=$(git -C "$root" -c core.quotePath=false status --porcelain=v1 2>/dev/null || true)
 
   clean=true
   [ -z "$porcelain" ] || clean=false
@@ -68,37 +106,22 @@ emit_git_state() {
   printf '"clean":%s,' "$clean"
 
   printf '"changed":['
-  changed_count=0
-  printf '%s\n' "$porcelain" | while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    code=$(printf '%s' "$line" | cut -c1-2)
-    path=$(printf '%s' "$line" | cut -c4-)
-
-    case "$code" in
-      '??') continue ;;
-    esac
-
-    case "$path" in
-      *' -> '*) path=${path##* -> } ;;
-    esac
-
-    status=$(status_name "$code")
-    if [ "$changed_count" -gt 0 ]; then printf ','; fi
+  count=0
+  emit_changed "$root" | while read -r status path; do
+    [ -n "$path" ] || continue
+    [ "$count" -eq 0 ] || printf ','
     printf '{"path":"%s","status":"%s"}' "$(json_string "$path")" "$status"
-    changed_count=$((changed_count + 1))
+    count=$((count + 1))
   done
   printf '],'
 
   printf '"untracked":['
-  untracked_count=0
-  printf '%s\n' "$porcelain" | while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    code=$(printf '%s' "$line" | cut -c1-2)
-    [ "$code" = '??' ] || continue
-    path=$(printf '%s' "$line" | cut -c4-)
-    if [ "$untracked_count" -gt 0 ]; then printf ','; fi
+  count=0
+  emit_untracked "$root" | while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    [ "$count" -eq 0 ] || printf ','
     printf '"%s"' "$(json_string "$path")"
-    untracked_count=$((untracked_count + 1))
+    count=$((count + 1))
   done
   printf ']'
 
@@ -125,7 +148,11 @@ emit_git_state() {
   printf '}\n'
 }
 
-[ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ] && { usage; exit 0; }
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  usage
+  exit 0
+fi
+
 [ "$#" -ge 1 ] || { usage; exit 2; }
 
 mode=$1
@@ -140,7 +167,7 @@ command -v git >/dev/null 2>&1 || fail "git not found"
 root=$(cd "$root" 2>/dev/null && pwd -P) || fail "root does not exist"
 [ "$root" != "/" ] || fail "refusing to run from /"
 if [ -n "${HOME:-}" ] && [ "$root" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ]; then
-  fail "refusing to run from HOME directly; use a repo root"
+  fail "refusing to run from HOME directly; use a repository root"
 fi
 
 git -C "$root" rev-parse --show-toplevel >/dev/null 2>&1 || fail "not inside a git repository"
