@@ -11,11 +11,10 @@ package repo
 	search: #SearchState
 }
 
-#TurnConstraints: #TurnContext & {
-	cwd: #SafeRoot
-	repo: #RepoConstraints
-	view: #TurnView
-	items: [...#TurnItemSummary]
+	search: {
+		queries: [...#RgQuery]
+		results: [...#RgResult]
+	}
 }
 
 #RuntimePolicy: {

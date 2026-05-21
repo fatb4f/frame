@@ -21,36 +21,31 @@ No skill zoo.
 ## Runtime graph
 
 ```txt
-repo-rg
-  -> emits bounded search evidence
-
-repo-git
-  -> emits git evidence and optional sem evidence
-
-cue
-  -> unifies evidence into #RepoState
-  -> validates constraints
-  -> projects views
-
-agent
-  -> consumes projected views
+repo-rg      -> bounded text-search evidence
+repo-git     -> git / optional semantic-git evidence
+cue          -> state unification, validation, selectors, views
+turn frame   -> bounded context contract for a single agent turn
+skills/*     -> Codex routing hints only
 ```
 
 ## Layout
 
 ```txt
-agent.cue/
-  cue.mod/module.cue
-  cue/state.cue
-  cue/constraints.cue
-  cue/views.cue
-  cue/turn.cue
-  cue/cmd.cue
-  bin/repo-rg
-  bin/repo-git
-  skills/cue/SKILL.md
-  skills/repo-search/SKILL.md
-  skills/semantic-git/SKILL.md
+repo-frame-slim/
+  cue/
+    state.cue
+    turn.cue
+    frame.cue
+    constraints.cue
+    views.cue
+    cmd.cue
+  bin/
+    repo-rg
+    repo-git
+  skills/
+    cue/SKILL.md
+    repo-search/SKILL.md
+    semantic-git/SKILL.md
 ```
 
 ## Usage
@@ -68,65 +63,34 @@ repo-rg 'literal text' . literal 80
 repo-rg 'regex_pattern' . regex 80
 
 cue vet ./cue
-cue export ./cue -e '#RepoConstraints'
+cue export ./cue -e '#RepoState'
 cue export ./cue -e '#TurnContext'
+cue export ./cue -e '#ContextFrame'
 ```
 
-## Refactor boundary
+## Turn compaction model
 
-Removed from the previous model:
+The turn frame is a context compiler, not an agent orchestrator:
 
 ```txt
-schema/
-workflow.cue turn/sidecar model
-app-server protocol mirror
-MCP schema surface
-agent-sdk skill registry
-turn/app-server schemas as imported runtime authority
-source-repo upstream reference dumps
-generated openai.yaml skill metadata
+observe repo facts -> validate state -> project frame -> agent consumes
+agent acts normally -> checks/eval record whether the frame was enough
 ```
 
-Kept as runtime concepts only:
+`#TurnContext` keeps the full typed control state for one turn:
 
 ```txt
-skills/cue
-skills/repo-search
-skills/semantic-git
-bin/repo-rg
-bin/repo-git
-cue/*
+turn         user input, cwd, and goal
+repo         git/search observations and projected views
+task         kind, scope, constraints, and unknowns
+budget       optional context limits
+projection   compact #ContextFrame for agent attention
+validation   whether the projection is fresh and valid
+eval         optional post-turn checks and missing evidence
 ```
 
-## Slim turn vocabulary
-
-The repo can name Codex runtime concepts without importing the full app-server schema surface.
-
-Kept as local CUE vocabulary:
-
-```txt
-#TurnContext
-#TurnItemSummary
-#TurnEvaluation
-#ReviewStart / #ReviewTarget
-#ExecCommandApproval
-#FileChangeRequestApproval
-```
-
-Ignored by design:
-
-```txt
-account/auth
-marketplace/plugins
-model lists
-MCP server management
-app lists
-Windows sandbox setup
-feedback upload
-realtime
-UI thread archive/name/list operations
-plan state
-```
+`#ContextFrame` is the compact consumption surface. Markdown may be rendered from
+it, but the CUE/JSON object remains the source of truth.
 
 ## Anti-sprawl invariant
 
@@ -137,3 +101,4 @@ Every file must answer one of these:
 3. Does it adapt rg into the state?
 4. Does it adapt git/sem into the state?
 5. Does it tell Codex when to use one of the above?
+6. Does it define the single-turn context projection contract?
