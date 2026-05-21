@@ -8,10 +8,8 @@ package repo
 	}
 
 	search: {
-		for _, r in results {
-			r.query.root:       #SafeRoot
-			r.query.maxResults: <=200
-		}
+		queries: [...#RgQuery]
+		results: [...#RgResult]
 	}
 }
 

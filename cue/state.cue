@@ -17,7 +17,7 @@ package repo
 
 	files?: {
 		relevant: [...string]
-		changed:  [...string]
+		changed: [...string]
 	}
 
 	views: #Views & {
@@ -30,15 +30,20 @@ package repo
 #GitState: {
 	head?:   string
 	branch?: string
-	clean:  bool
+	clean:   bool
 
-	changed:   [...#ChangedFile]
+	changed: [...#ChangedFile]
 	untracked: [...string]
+
+	diff?: {
+		unstaged?: string
+		staged?:   string
+	}
 
 	semantic?: {
 		changedEntities?: [...#ChangedEntity]
-		blastRadius?:     [...#EntityImpact]
-		raw?:             string
+		blastRadius?: [...#EntityImpact]
+		raw?: string
 	}
 }
 
@@ -55,11 +60,11 @@ package repo
 }
 
 #EntityImpact: {
-	entity:        string
-	file?:         string
-	dependents?:   [...string]
+	entity: string
+	file?:  string
+	dependents?: [...string]
 	dependencies?: [...string]
-	tests?:        [...string]
+	tests?: [...string]
 }
 
 #RgQuery: {
