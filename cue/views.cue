@@ -12,7 +12,10 @@ package repo
 
 	let repoRoot = root
 
-	dirtyFiles: [for f in git.changed {f.path}]
+	dirtyFiles: [
+		for f in git.changed {f.path},
+		for path in git.untracked {path},
+	]
 
 	agent: {
 		root:       repoRoot
@@ -60,37 +63,37 @@ package repo
 
 
 #TurnAgentView: {
-	context: #TurnContext & {view: "agent"}
-	threadId: context.threadId
-	turnId?:  context.turnId
-	input:    context.input
-	cwd:      context.cwd
+	context: #TurnContext
+	threadId?: context.turn.threadId
+	turnId?:   context.turn.id
+	input:     context.turn.input
+	cwd:       context.turn.cwd
 	repo:     context.repo.views.agent
-	items:    context.items
-	diff?:    context.diff
-	evaluation?: context.evaluation
+	task:     context.task
+	frame:    context.projection
+	eval?:    context.eval
 }
 
 #TurnReviewView: {
-	context: #TurnContext & {view: "review"}
-	threadId: context.threadId
-	turnId?:  context.turnId
-	input:    context.input
-	cwd:      context.cwd
+	context: #TurnContext
+	threadId?: context.turn.threadId
+	turnId?:   context.turn.id
+	input:     context.turn.input
+	cwd:       context.turn.cwd
 	repo:     context.repo.views.review
-	items:    context.items
-	diff?:    context.diff
-	evaluation?: context.evaluation
+	task:     context.task
+	frame:    context.projection
+	eval?:    context.eval
 }
 
 #TurnCommitView: {
-	context: #TurnContext & {view: "commit"}
-	threadId: context.threadId
-	turnId?:  context.turnId
-	input:    context.input
-	cwd:      context.cwd
+	context: #TurnContext
+	threadId?: context.turn.threadId
+	turnId?:   context.turn.id
+	input:     context.turn.input
+	cwd:       context.turn.cwd
 	repo:     context.repo.views.commit
-	items:    context.items
-	diff?:    context.diff
-	evaluation?: context.evaluation
+	task:     context.task
+	frame:    context.projection
+	eval?:    context.eval
 }

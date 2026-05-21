@@ -11,12 +11,6 @@ package repo
 	search: #SearchState
 }
 
-	search: {
-		queries: [...#RgQuery]
-		results: [...#RgResult]
-	}
-}
-
 #RuntimePolicy: {
 	noMCP:          true
 	noGo:           true

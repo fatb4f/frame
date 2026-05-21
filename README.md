@@ -42,6 +42,7 @@ repo-frame-slim/
   bin/
     repo-rg
     repo-git
+    repo-frame
   skills/
     cue/SKILL.md
     repo-search/SKILL.md
@@ -62,10 +63,13 @@ repo-git semantic .
 repo-rg 'literal text' . literal 80
 repo-rg 'regex_pattern' . regex 80
 
+repo-frame . 'Observe repository state.'
+repo-frame . 'Explain repo state wiring.' '#RepoState' literal 80
+
 cue vet ./cue
-cue export ./cue -e '#RepoState'
-cue export ./cue -e '#TurnContext'
-cue export ./cue -e '#ContextFrame'
+cue export ./cue -e '#ExampleRepoState'
+cue export ./cue -e '#ExampleTurnContext'
+cue export ./cue -e '#ExampleContextFrame'
 ```
 
 ## Turn compaction model
@@ -75,6 +79,15 @@ The turn frame is a context compiler, not an agent orchestrator:
 ```txt
 observe repo facts -> validate state -> project frame -> agent consumes
 agent acts normally -> checks/eval record whether the frame was enough
+```
+
+`repo-frame` wires the first half of that loop for local use:
+
+```txt
+repo-git status + optional repo-rg query
+-> temporary #TurnContext
+-> cue export #RuntimeContextFrame
+-> JSON #ContextFrame
 ```
 
 `#TurnContext` keeps the full typed control state for one turn:

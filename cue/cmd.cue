@@ -23,6 +23,8 @@ command: summary: {
 command: diff: {
 	run: exec.Run & {
 		cmd: "repo-git diff ."
+		env: {}
+		success: true
 	}
 }
 

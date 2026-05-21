@@ -16,7 +16,12 @@ package repo
 
 	constraints: [...string]
 
-	suggestedChecks: [...#SuggestedCheck]
+	suggestedChecks: *[
+		{
+			command: "cue vet ./cue"
+			reason:  "validate repo context schema"
+		},
+	] | [...#SuggestedCheck]
 
 	openQuestions?: [...string]
 }

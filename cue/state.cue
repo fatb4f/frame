@@ -20,10 +20,14 @@ package repo
 		changed: [...string]
 	}
 
+	let repoRoot = root
+	let repoGit = git
+	let repoSearch = search
+
 	views: #Views & {
-		root:   root
-		git:    git
-		search: search
+		root:   repoRoot
+		git:    repoGit
+		search: repoSearch
 	}
 }
 
@@ -44,11 +48,6 @@ package repo
 		changedEntities?: [...#ChangedEntity]
 		blastRadius?: [...#EntityImpact]
 		raw?: string
-	}
-
-	diff?: {
-		unstaged?: string
-		staged?:   string
 	}
 }
 
@@ -90,4 +89,9 @@ package repo
 	query:     #RgQuery
 	matches:   [...#RgMatch]
 	truncated: *false | bool
+}
+
+#SearchState: {
+	queries: [...#RgQuery]
+	results: [...#RgResult]
 }

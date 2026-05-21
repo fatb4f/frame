@@ -9,9 +9,37 @@ package repo
 
 	budget: #ContextBudget
 
+	let observedRepo = repo
+	let currentTurn = turn
+	let currentTask = task
+
 	projection: #ContextFrame
+	projection: {
+		objective: currentTask.scope | currentTurn.goal
+		repo: {
+			root:    observedRepo.root
+			clean:   observedRepo.git.clean
+			branch?: observedRepo.git.branch
+			changed: observedRepo.views.dirtyFiles
+		}
+		activeFiles: [for changedPath in observedRepo.views.dirtyFiles {
+			path:   changedPath
+			reason: "changed in git status"
+		}]
+		searchEvidence: observedRepo.search.results
+		constraints:    currentTask.constraints
+		openQuestions?: currentTask.unknowns
+	}
 
 	validation: #ContextValidation
+	validation: {
+		errors:   *[] | [...string]
+		warnings: *[] | [...string]
+		passed:   len(errors) == 0
+		freshness?: {
+			gitHead?: observedRepo.git.head
+		}
+	}
 
 	eval?: #TurnEval
 }
