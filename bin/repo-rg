@@ -2,28 +2,27 @@
 set -eu
 
 usage() {
-  cat >&2 <<'EOF'
+  cat >&2 <<'USAGE'
 usage: repo-rg QUERY [ROOT] [MODE] [MAX_RESULTS]
 
 Inputs:
   QUERY        search string
-  ROOT         repo/root directory, default: .
+  ROOT         repository/root directory, default: .
   MODE         literal | regex, default: literal
   MAX_RESULTS 1..200, default: ${REPO_RG_MAX_RESULTS:-80}
 
 Output:
   JSON shaped as #RgResult.
-EOF
+USAGE
 }
 
 json_string() {
-  # JSON string encoder for shell-provided values.
   printf '%s' "$1" | awk '
     BEGIN { ORS = ""; first = 1 }
     {
       gsub(/\\/, "\\\\")
       gsub(/"/, "\\\"")
-      gsub(/	/, "\\t")
+      gsub(/\t/, "\\t")
       if (!first) printf "\\n"
       printf "%s", $0
       first = 0
@@ -36,7 +35,11 @@ fail() {
   exit 2
 }
 
-[ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ] && { usage; exit 0; }
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  usage
+  exit 0
+fi
+
 [ "$#" -ge 1 ] || { usage; exit 2; }
 
 query=$1
@@ -60,7 +63,7 @@ command -v rg >/dev/null 2>&1 || fail "rg not found"
 root=$(cd "$root" 2>/dev/null && pwd -P) || fail "root does not exist"
 [ "$root" != "/" ] || fail "refusing to search /"
 if [ -n "${HOME:-}" ] && [ "$root" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ]; then
-  fail "refusing to search HOME directly; use a repo root"
+  fail "refusing to search HOME directly; use a repository root"
 fi
 
 flags="--line-number --no-heading --color never"

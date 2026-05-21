@@ -1,18 +1,18 @@
 package repo
 
+// One repo-state object. Keep this boring.
+
 #SafeRoot: string & =~"^/" & !="/"
+#RelPath:  string & !="" & !~"^/"
 
 #RepoState: {
 	root: #SafeRoot
 
 	git: #GitState
 
-	search: *{
+	search: #SearchState | *{
 		queries: []
 		results: []
-	} | {
-		queries: [...#RgQuery]
-		results: [...#RgResult]
 	}
 
 	files?: {
@@ -45,15 +45,20 @@ package repo
 		blastRadius?: [...#EntityImpact]
 		raw?: string
 	}
+
+	diff?: {
+		unstaged?: string
+		staged?:   string
+	}
 }
 
 #ChangedFile: {
-	path:   string
+	path:   #RelPath
 	status: "added" | "modified" | "deleted" | "renamed" | "unknown"
 }
 
 #ChangedEntity: {
-	file:   string
+	file:   #RelPath
 	kind:   string
 	name:   string
 	change: "added" | "modified" | "deleted" | "unknown"
@@ -75,14 +80,14 @@ package repo
 }
 
 #RgMatch: {
-	path: string
+	path: #RelPath
 	line: int & >0
 	text: string
 }
 
 #RgResult: {
-	adapter: "rg"
-	query:   #RgQuery
-	matches: [...#RgMatch]
+	adapter:   "rg"
+	query:     #RgQuery
+	matches:   [...#RgMatch]
 	truncated: *false | bool
 }

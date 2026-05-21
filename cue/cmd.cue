@@ -2,6 +2,8 @@ package repo
 
 import "tool/exec"
 
+// Convenience commands. The executable adapters remain the runtime boundary.
+
 command: status: {
 	run: exec.Run & {
 		cmd: "repo-git status ."
@@ -15,6 +17,12 @@ command: summary: {
 		cmd: "repo-git summary ."
 		env: {}
 		success: true
+	}
+}
+
+command: diff: {
+	run: exec.Run & {
+		cmd: "repo-git diff ."
 	}
 }
 

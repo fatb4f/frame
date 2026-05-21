@@ -1,19 +1,24 @@
-# repo-frame-slim
+# agent.cue slim
 
 Minimal repo-context surface for Codex/agent turns.
 
 ## Contract
 
 ```txt
-Adapters observe.
-CUE unifies.
-Views project.
-Policies validate.
-Agents consume.
-Evals judge.
+Keep it deletable.
+
+CUE = one repo state object + slim turn envelope + constraints + selectors
+git = semantic repo-change observation
+rg  = bounded text search observation
+
+No MCP.
+No Go.
+No agent-sdk repo.
+No framework.
+No skill zoo.
 ```
 
-Runtime surface:
+## Runtime graph
 
 ```txt
 repo-rg      -> bounded text-search evidence
@@ -50,7 +55,12 @@ export PATH="$PWD/bin:$PATH"
 
 repo-git status .
 repo-git summary .
-repo-rg 'TODO' . literal 40
+repo-git diff .
+repo-git staged .
+repo-git semantic .
+
+repo-rg 'literal text' . literal 80
+repo-rg 'regex_pattern' . regex 80
 
 cue vet ./cue
 cue export ./cue -e '#RepoState'
