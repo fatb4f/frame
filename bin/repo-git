@@ -85,7 +85,19 @@ emit_untracked() {
     [ "$code" = '??' ] || continue
     path=$(printf '%s' "$line" | cut -c4-)
     path=$(normalize_git_path "$path")
-    printf '%s\n' "$path"
+    case "$path" in
+      */)
+        dir=${path%/}
+        if [ -d "$root/$dir" ]; then
+          (cd "$root" && find "$dir" -type f -print | sort)
+        else
+          printf '%s\n' "$path"
+        fi
+        ;;
+      *)
+        printf '%s\n' "$path"
+        ;;
+    esac
   done
 }
 

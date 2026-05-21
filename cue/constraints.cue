@@ -20,14 +20,16 @@ package repo
 	noAgentLoop:    true
 	noPlanState:    true
 
-	allowedAdapters: ["repo-rg", "repo-git"]
-	allowedSkills:   ["cue", "repo-search", "semantic-git"]
+	allowedAdapters: ["repo-rg", "repo-git", "repo-frame"]
+	allowedSkills:   ["repo-frame", "cue", "repo-search", "semantic-git"]
 	allowedTurnItems: ["userMessage", "agentMessage", "reasoning", "commandExecution", "fileChange", "toolCall", "contextCompaction"]
 	maxSearchResults: 200
 }
 
 #SkillProjection: {
 	keep: [
+		"AGENTS.md",
+		"skills/repo-frame/SKILL.md",
 		"skills/cue/SKILL.md",
 		"skills/repo-search/SKILL.md",
 		"skills/semantic-git/SKILL.md",

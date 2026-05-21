@@ -32,6 +32,7 @@ skills/*     -> Codex routing hints only
 
 ```txt
 repo-frame-slim/
+  AGENTS.md
   cue/
     state.cue
     turn.cue
@@ -44,9 +45,33 @@ repo-frame-slim/
     repo-git
     repo-frame
   skills/
+    repo-frame/SKILL.md
     cue/SKILL.md
     repo-search/SKILL.md
     semantic-git/SKILL.md
+```
+
+## Codex integration
+
+`AGENTS.md` is the native repo contract for Codex. It makes the workflow
+explicit:
+
+```txt
+start repo-aware turn
+-> run repo-frame
+-> consume #ContextFrame JSON as evidence
+-> inspect narrower files/search only as needed
+-> run suggested checks after edits
+```
+
+`skills/repo-frame/SKILL.md` is the front-door skill. The lower-level skills are
+only for narrower adapter or CUE work:
+
+```txt
+repo-frame   default turn-context compiler
+repo-search  bounded rg evidence through repo-rg
+semantic-git git and optional sem evidence through repo-git
+cue          schema, validation, projection, and examples
 ```
 
 ## Usage
