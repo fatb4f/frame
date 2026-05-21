@@ -95,8 +95,6 @@ normalize native plan
 ## Usage
 
 ```sh
-export PATH="$PWD/bin:$PATH"
-
 repo-git status .
 repo-git summary .
 repo-git diff .

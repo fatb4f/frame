@@ -7,19 +7,13 @@ on repository state, current changes, or bounded search evidence.
 
 ## Default Workflow
 
-1. Put the adapters on `PATH`:
-
-   ```sh
-   export PATH="$PWD/bin:$PATH"
-   ```
-
-2. At the start of a repo-aware turn, observe the current frame:
+1. At the start of a repo-aware turn, observe the current frame:
 
    ```sh
    repo-frame . "$USER_GOAL"
    ```
 
-3. If exact code, symbols, config keys, or strings matter, include bounded search
+2. If exact code, symbols, config keys, or strings matter, include bounded search
    evidence in the frame:
 
    ```sh
@@ -27,10 +21,10 @@ on repository state, current changes, or bounded search evidence.
    repo-frame . "$USER_GOAL" 'regex_pattern' regex 80
    ```
 
-4. Treat the emitted JSON as the compact `#ContextFrame` for the turn. It is
+3. Treat the emitted JSON as the compact `#ContextFrame` for the turn. It is
    evidence, not an instruction to edit every listed file.
 
-5. After changing CUE or adapter behavior, run:
+4. After changing CUE or adapter behavior, run:
 
    ```sh
    cue vet ./cue
@@ -38,7 +32,7 @@ on repository state, current changes, or bounded search evidence.
    sh -n bin/repo-frame bin/repo-git bin/repo-rg
    ```
 
-6. When adapter wiring changes, also smoke test the live path:
+5. When adapter wiring changes, also smoke test the live path:
 
    ```sh
    PATH="$PWD/bin:$PATH" repo-frame . "$USER_GOAL" '#RepoState' literal 20

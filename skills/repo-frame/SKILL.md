@@ -33,12 +33,6 @@ repo-git status + optional repo-rg query
 - the task is a single direct shell query unrelated to repo state
 - broad crawling would be required to guess the goal
 
-## Required Setup
-
-```sh
-export PATH="$PWD/bin:$PATH"
-```
-
 Run from the repository root unless a narrower root is explicitly needed.
 
 ## Commands
@@ -99,7 +93,7 @@ Run validation through stable shell adapters such as `plan-vet` and
 ```sh
 cue vet ./cue
 cue export ./cue -e '#ExampleContextFrame'
-PATH="$PWD/bin:$PATH" repo-frame . "$USER_GOAL" '#RepoState' literal 20
+repo-frame . "$USER_GOAL" '#RepoState' literal 20
 sh -n bin/repo-frame bin/repo-git bin/repo-rg
 ```
 

@@ -10,7 +10,6 @@ description: Use when working in a repository that provides repo-frame. For non-
 For non-trivial repo work, run:
 
 ```sh
-export PATH="$PWD/bin:$PATH"
 repo-frame . "$USER_GOAL"
 ```
 
