@@ -77,3 +77,12 @@ package repo
 }
 
 #ExampleContextFrame: #ExampleTurnContext.projection
+
+#ExampleCodexToolSurface: #CodexToolSurface & {
+	codexHome: "/home/example/.local/share/codex"
+	pathPrepend: [
+		"/home/example/.local/share/codex/bin",
+		"/home/example/.local/share/path",
+		"/home/example/.local/bin",
+	]
+}

@@ -115,6 +115,24 @@ cue export ./cue -e '#ExampleTurnContext'
 cue export ./cue -e '#ExampleContextFrame'
 ```
 
+## Codex-home projection
+
+For Codex runtime use, keep `$CODEX_HOME/bin` as the stable command surface and
+let wrappers call back into this checkout:
+
+```sh
+export CODEX_HOME="${CODEX_HOME:-$HOME/.local/share/codex}"
+mkdir -p "$CODEX_HOME/bin" "$CODEX_HOME/tools"
+ln -sfn "$PWD" "$CODEX_HOME/tools/frame"
+install -m 755 codex-home/bin/* "$CODEX_HOME/bin/"
+
+PATH="$CODEX_HOME/bin:$PATH" codex-frame-doctor
+```
+
+The wrappers use `FRAME_SRC` when set, otherwise
+`$HOME/.local/src/fatb4f/frame`. The venv path remains an implementation detail;
+do not make a venv activation the PATH contract.
+
 ## Turn compaction model
 
 The turn frame is a context compiler, not an agent orchestrator:
