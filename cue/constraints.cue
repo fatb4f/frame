@@ -1,18 +1,21 @@
 package repo
 
+// Validation rules. These are policy constraints over observed state,
+// not a planner, scheduler, or agent-loop model.
+
 #RepoConstraints: #RepoState & {
 	root: #SafeRoot
-
 	git: {
 		clean: bool
 	}
+	search: #SearchState
+}
 
-	search: {
-		for _, r in results {
-			r.query.root:       #SafeRoot
-			r.query.maxResults: <=200
-		}
-	}
+#TurnConstraints: #TurnContext & {
+	cwd: #SafeRoot
+	repo: #RepoConstraints
+	view: #TurnView
+	items: [...#TurnItemSummary]
 }
 
 #RuntimePolicy: {
@@ -21,5 +24,34 @@ package repo
 	noWriteTools:   true
 	noPatchTools:   true
 	noPlannerModel: true
-	allowedSkills: ["cue", "repo-search", "semantic-git"]
+	noAgentLoop:    true
+	noPlanState:    true
+
+	allowedAdapters: ["repo-rg", "repo-git"]
+	allowedSkills:   ["cue", "repo-search", "semantic-git"]
+	allowedTurnItems: ["userMessage", "agentMessage", "reasoning", "commandExecution", "fileChange", "toolCall", "contextCompaction"]
+	maxSearchResults: 200
+}
+
+#SkillProjection: {
+	keep: [
+		"skills/cue/SKILL.md",
+		"skills/repo-search/SKILL.md",
+		"skills/semantic-git/SKILL.md",
+	]
+
+	removeFromRuntime: [
+		"agent-sdk",
+		"go-sdk",
+		"argc",
+		"bash-ast",
+		"bashly",
+		"bats-core",
+		"shell-validation",
+		"shellspec",
+		"tree-sitter",
+		"schema",
+		"workflow.cue",
+		"source-repo/references",
+	]
 }

@@ -1,23 +1,23 @@
 package repo
 
+// One repo-state object. Keep this boring.
+
 #SafeRoot: string & =~"^/" & !="/"
+#RelPath:  string & !="" & !~"^/"
 
 #RepoState: {
 	root: #SafeRoot
 
 	git: #GitState
 
-	search: *{
+	search: #SearchState | *{
 		queries: []
 		results: []
-	} | {
-		queries: [...#RgQuery]
-		results: [...#RgResult]
 	}
 
 	files?: {
-		relevant: [...string]
-		changed:  [...string]
+		relevant: [...#RelPath]
+		changed:  [...#RelPath]
 	}
 
 	views: #Views & {
@@ -33,22 +33,27 @@ package repo
 	clean:  bool
 
 	changed:   [...#ChangedFile]
-	untracked: [...string]
+	untracked: [...#RelPath]
 
 	semantic?: {
 		changedEntities?: [...#ChangedEntity]
 		blastRadius?:     [...#EntityImpact]
 		raw?:             string
 	}
+
+	diff?: {
+		unstaged?: string
+		staged?:   string
+	}
 }
 
 #ChangedFile: {
-	path:   string
+	path:   #RelPath
 	status: "added" | "modified" | "deleted" | "renamed" | "unknown"
 }
 
 #ChangedEntity: {
-	file:   string
+	file:   #RelPath
 	kind:   string
 	name:   string
 	change: "added" | "modified" | "deleted" | "unknown"
@@ -56,10 +61,15 @@ package repo
 
 #EntityImpact: {
 	entity:        string
-	file?:         string
-	dependents?:   [...string]
-	dependencies?: [...string]
-	tests?:        [...string]
+	file?:         #RelPath
+	dependents?:   [...#RelPath]
+	dependencies?: [...#RelPath]
+	tests?:        [...#RelPath]
+}
+
+#SearchState: {
+	queries: [...#RgQuery]
+	results: [...#RgResult]
 }
 
 #RgQuery: {
@@ -70,14 +80,14 @@ package repo
 }
 
 #RgMatch: {
-	path: string
+	path: #RelPath
 	line: int & >0
 	text: string
 }
 
 #RgResult: {
-	adapter: "rg"
-	query:   #RgQuery
-	matches: [...#RgMatch]
+	adapter:   "rg"
+	query:     #RgQuery
+	matches:   [...#RgMatch]
 	truncated: *false | bool
 }
