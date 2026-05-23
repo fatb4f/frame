@@ -12,7 +12,14 @@ package repo
 }
 
 #RuntimePolicy: {
-	noMCP:          true
+	mcpEvidenceCapture: {
+		enabled: true
+		allowlistedTools: [
+			"mcp-ripgrep",
+			"git-mcp-server",
+		]
+		persistedContext: "cue-hook-manifests"
+	}
 	noDynamicTools: true
 	noGo:           true
 	noWriteTools:   true
@@ -23,19 +30,16 @@ package repo
 	noPlanDeltaAsCanonical: true
 	noUpdatePlanExtension:  true
 
-	allowedAdapters: ["repo-rg", "repo-git", "repo-frame"]
-	allowedSkills:   ["repo-frame", "cue", "repo-search", "semantic-git"]
-	allowedTurnItems: ["userMessage", "agentMessage", "reasoning", "commandExecution", "fileChange", "toolCall", "contextCompaction"]
+	runtimeAdapters: ["cuerail-hook", "cuerail-doctor"]
+	allowedSkills:   ["cue"]
+	allowedTurnItems: ["hookManifest", "turnManifest"]
 	maxSearchResults: 200
 }
 
 #SkillProjection: {
 	keep: [
 		"AGENTS.md",
-		"skills/repo-frame/SKILL.md",
 		"skills/cue/SKILL.md",
-		"skills/repo-search/SKILL.md",
-		"skills/semantic-git/SKILL.md",
 	]
 
 	removeFromRuntime: [

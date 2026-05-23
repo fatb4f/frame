@@ -2,43 +2,28 @@ package repo
 
 import "tool/exec"
 
-// Convenience commands. The executable adapters remain the runtime boundary.
+// Convenience commands for the cuerail contract. The installed runtime remains
+// the boundary; these commands are validation helpers, not hook execution.
 
-command: status: {
+command: doctor: {
 	run: exec.Run & {
-		cmd: "repo-git status ."
+		cmd: "cuerail-doctor"
 		env: {}
 		success: true
 	}
 }
 
-command: summary: {
+command: vet: {
 	run: exec.Run & {
-		cmd: "repo-git summary ."
+		cmd: "cue vet ./cue"
 		env: {}
 		success: true
 	}
 }
 
-command: diff: {
+command: exampleToolSurface: {
 	run: exec.Run & {
-		cmd: "repo-git diff ."
-		env: {}
-		success: true
-	}
-}
-
-command: staged: {
-	run: exec.Run & {
-		cmd: "repo-git staged ."
-		env: {}
-		success: true
-	}
-}
-
-command: semantic: {
-	run: exec.Run & {
-		cmd: "repo-git semantic ."
+		cmd: "cue export ./cue -e '#ExampleCodexToolSurface'"
 		env: {}
 		success: true
 	}

@@ -1,29 +1,42 @@
 package repo
 
-// Codex-facing command surface. Wrappers in codexHome/bin are the stable
-// contract; venvs and source repositories are implementation details.
+// Codex-facing cuerail runtime surface. The source checkout is an authoring
+// location; hook execution uses the global runtime under CODEX_HOME.
 
-#CodexToolSurface: {
-	codexHome: #SafeRoot
-	binDir:    "\(codexHome)/bin"
+#CodexRuntimeEnv: {
+	codexHome:  #SafeRoot
+	codexState: #SafeRoot
 
-	required: [
-		"repo-frame",
-		"repo-git",
-		"repo-rg",
-		"cue",
-		"rg",
-		"git",
-	]
-
-	optional: [
-		"sem",
-		"plan-vet",
-		"evidence-vet",
-		"codex-frame-doctor",
-	]
-
-	pathPrepend: [...#SafeRoot]
-	pathPrepend: [binDir, ...]
+	cuerailHome:  *"\(codexHome)/tools/cuerail" | #SafeRoot
+	cuerailState: *"\(codexState)/cuerail" | #SafeRoot
+	cuerailTurns: *"\(cuerailState)/turns" | #SafeRoot
 }
 
+#CodexToolSurface: {
+	codexHome:  #SafeRoot
+	codexState: #SafeRoot
+
+	cuerailHome:  *"\(codexHome)/tools/cuerail" | #SafeRoot
+	cuerailState: *"\(codexState)/cuerail" | #SafeRoot
+	cuerailTurns: *"\(cuerailState)/turns" | #SafeRoot
+
+	let railHome = cuerailHome
+	binDir: "\(railHome)/bin"
+
+	required: [
+		"cuerail-hook",
+		"cuerail-doctor",
+		"cue",
+		"jq",
+		"mktemp",
+		"flock",
+		"mv",
+		"mkdir",
+		"chmod",
+	]
+
+	officialSchemaSource: "/home/_404/src/fatb4f/tmp/codex-schemas/hooks/schema/generated"
+
+	hookCommand: "\(railHome)/bin/cuerail-hook"
+	doctorCommand: "\(railHome)/bin/cuerail-doctor"
+}
