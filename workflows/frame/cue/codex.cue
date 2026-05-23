@@ -40,3 +40,56 @@ package repo
 	hookCommand: "\(railHome)/bin/cuerail-hook"
 	doctorCommand: "\(railHome)/bin/cuerail-doctor"
 }
+
+#CuerailInstallSurface: {
+	codexHome:  #SafeRoot
+	codexState: #SafeRoot
+
+	cuerailHome:  *"\(codexHome)/tools/cuerail" | #SafeRoot
+	cuerailState: *"\(codexState)/cuerail" | #SafeRoot
+	cuerailTurns: *"\(cuerailState)/turns" | #SafeRoot
+
+	let home = codexHome
+	let state = codexState
+	let railHome = cuerailHome
+	let railState = cuerailState
+	let railTurns = cuerailTurns
+
+	toolsDir: "\(home)/tools"
+	homeBin:  "\(home)/bin"
+	worktreePath: railHome
+
+	hookCommand:   "\(railHome)/bin/cuerail-hook"
+	doctorCommand: "\(railHome)/bin/cuerail-doctor"
+
+	generatedWrappers: [
+		"\(homeBin)/cuerail-hook",
+		"\(homeBin)/cuerail-doctor",
+	]
+
+	generatedHookRegistration: "\(home)/hooks.json"
+
+	installerRequired: [
+		"git",
+		"mkdir",
+		"chmod",
+		"ln",
+	]
+
+	mutableState: [
+		railState,
+		railTurns,
+	]
+
+	neverTrack: [
+		home,
+		state,
+		"\(home)/auth.json",
+		"\(home)/sessions",
+		"\(home)/cache",
+		"\(home)/plugins",
+		"\(home)/models_cache.json",
+		"\(home)/version.json",
+		railState,
+	]
+}

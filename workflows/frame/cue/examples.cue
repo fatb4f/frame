@@ -82,3 +82,8 @@ package repo
 	codexHome:  "/home/example/.local/share/codex"
 	codexState: "/home/example/.local/state/codex"
 }
+
+#ExampleCuerailInstallSurface: #CuerailInstallSurface & {
+	codexHome:  "/home/example/.local/share/codex"
+	codexState: "/home/example/.local/state/codex"
+}

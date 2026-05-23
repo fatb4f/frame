@@ -1,0 +1,74 @@
+#!/usr/bin/env sh
+set -eu
+
+die() {
+  printf 'cuerail-install: %s\n' "$1" >&2
+  exit 1
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+: "${CODEX_HOME:?CODEX_HOME is required}"
+: "${CODEX_STATE:?CODEX_STATE is required}"
+
+CUERAIL_HOME="${CUERAIL_HOME:-$CODEX_HOME/tools/cuerail}"
+CUERAIL_STATE="${CUERAIL_STATE:-$CODEX_STATE/cuerail}"
+CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_STATE/turns}"
+CUERAIL_WORKTREE_BRANCH="${CUERAIL_WORKTREE_BRANCH:-cuerail-runtime}"
+
+case "$CUERAIL_HOME" in
+  "$CODEX_HOME"|"$CODEX_HOME"/) die "CUERAIL_HOME must not be CODEX_HOME" ;;
+  "$CODEX_HOME"/tools/cuerail) ;;
+  *) die "CUERAIL_HOME must default to CODEX_HOME/tools/cuerail for slice 2" ;;
+esac
+
+need git
+need mkdir
+need chmod
+need ln
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+source_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
+
+if ! git -C "$source_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  die "source root is not a git checkout: $source_root"
+fi
+
+mkdir -p "$CODEX_HOME/tools" "$CODEX_HOME/bin" "$CUERAIL_TURNS"
+
+if [ -L "$CUERAIL_HOME" ]; then
+  die "CUERAIL_HOME must be a git worktree, not a symlink: $CUERAIL_HOME"
+fi
+
+if [ ! -e "$CUERAIL_HOME" ]; then
+  if git -C "$source_root" show-ref --verify --quiet "refs/heads/$CUERAIL_WORKTREE_BRANCH"; then
+    git -C "$source_root" worktree add "$CUERAIL_HOME" "$CUERAIL_WORKTREE_BRANCH"
+  else
+    git -C "$source_root" worktree add -b "$CUERAIL_WORKTREE_BRANCH" "$CUERAIL_HOME" HEAD
+  fi
+elif ! git -C "$CUERAIL_HOME" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  die "CUERAIL_HOME exists but is not a git worktree: $CUERAIL_HOME"
+elif [ "$(git -C "$CUERAIL_HOME" rev-parse --show-toplevel)" = "$CODEX_HOME" ]; then
+  die "CODEX_HOME must not be the cuerail git root"
+fi
+
+if [ -x "$CUERAIL_HOME/bin/cuerail-hook" ]; then
+  ln -sfn "$CUERAIL_HOME/bin/cuerail-hook" "$CODEX_HOME/bin/cuerail-hook"
+else
+  printf 'cuerail-install: pending runtime command: %s\n' "$CUERAIL_HOME/bin/cuerail-hook" >&2
+fi
+
+if [ -x "$CUERAIL_HOME/bin/cuerail-doctor" ]; then
+  ln -sfn "$CUERAIL_HOME/bin/cuerail-doctor" "$CODEX_HOME/bin/cuerail-doctor"
+else
+  printf 'cuerail-install: pending runtime command: %s\n' "$CUERAIL_HOME/bin/cuerail-doctor" >&2
+fi
+
+chmod 700 "$CUERAIL_STATE" "$CUERAIL_TURNS" 2>/dev/null || true
+
+printf 'CUERAIL_HOME=%s\n' "$CUERAIL_HOME"
+printf 'CUERAIL_STATE=%s\n' "$CUERAIL_STATE"
+printf 'CUERAIL_TURNS=%s\n' "$CUERAIL_TURNS"
+printf 'CUERAIL_WORKTREE_BRANCH=%s\n' "$CUERAIL_WORKTREE_BRANCH"
