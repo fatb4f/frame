@@ -78,6 +78,7 @@ write_wrapper() {
 
 write_wrapper cuerail-hook "$CUERAIL_HOME/bin/cuerail-hook"
 write_wrapper cuerail-doctor "$CUERAIL_HOME/bin/cuerail-doctor"
+write_wrapper cuerail-schema-sync "$CUERAIL_HOME/bin/cuerail-schema-sync"
 
 chmod 700 "$CUERAIL_STATE" "$CUERAIL_TURNS" 2>/dev/null || true
 

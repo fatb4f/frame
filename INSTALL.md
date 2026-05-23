@@ -29,6 +29,7 @@ Generated install surface:
 ```txt
 $CODEX_HOME/bin/cuerail-hook
 $CODEX_HOME/bin/cuerail-doctor
+$CODEX_HOME/bin/cuerail-schema-sync
 $CODEX_HOME/hooks.json
 ```
 

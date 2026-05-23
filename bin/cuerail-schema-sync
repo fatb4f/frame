@@ -1,0 +1,176 @@
+#!/usr/bin/env sh
+set -eu
+
+die() {
+  printf 'cuerail-schema-sync: %s\n' "$1" >&2
+  exit 1
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+usage() {
+  printf 'usage: cuerail-schema-sync --sync|--check\n' >&2
+  exit 2
+}
+
+[ "$#" -eq 1 ] || usage
+case "$1" in
+  --sync|--check) mode=$1 ;;
+  *) usage ;;
+esac
+
+: "${CODEX_HOME:?CODEX_HOME is required}"
+: "${CODEX_STATE:?CODEX_STATE is required}"
+: "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"
+
+CUERAIL_STATE="${CUERAIL_STATE:-$CODEX_STATE/cuerail}"
+export CODEX_HOME CODEX_STATE CUERAIL_HOME CUERAIL_STATE
+
+case "$CUERAIL_HOME" in
+  "$CODEX_HOME"/tools/cuerail) ;;
+  *) die "CUERAIL_HOME must be CODEX_HOME/tools/cuerail" ;;
+esac
+
+CUE_DIR="$CUERAIL_HOME/cue"
+CUE_PKG="./cue"
+[ -d "$CUE_DIR" ] || die "missing active CUE package: $CUE_DIR"
+
+need codex
+need awk
+need cmp
+need cue
+need curl
+need jq
+need mkdir
+need mv
+need rm
+need sed
+need sha256sum
+need tr
+need wc
+
+version=$(
+  codex --version |
+    sed -n 's/.*\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' |
+    sed -n '1p'
+)
+[ -n "$version" ] || die "could not extract Codex semver from codex --version"
+
+ref=$(
+  (cd "$CUERAIL_HOME" && cue export "$CUE_PKG" -e '#SchemaSync.selectedRef' -t codexVersion="$version") |
+    jq -r .
+)
+[ -n "$ref" ] && [ "$ref" != "null" ] || die "CUE did not select a provider ref"
+
+raw_dir="$CUERAIL_STATE/schemas/openai-codex/$ref/generated"
+lock_dir="$CUERAIL_STATE/schemas/openai-codex/$ref"
+lock_file="$lock_dir/schema.lock.json"
+generated_cue_dir="$CUE_DIR/generated/hooks"
+base="https://raw.githubusercontent.com/openai/codex/$ref/codex-rs/hooks/schema/generated"
+
+tmp_files=${TMPDIR:-/tmp}/cuerail-schema-files.$$
+tmp_lock_json="$tmp_files.lock.json"
+trap 'rm -f "$tmp_files" "$tmp_files.json" "$tmp_files.lock" "$tmp_files.lock.json" "$tmp_files.cue" "$tmp_files.cue2"' EXIT HUP INT TERM
+
+(cd "$CUERAIL_HOME" && cue export "$CUE_PKG" -e '#ExpectedHookSchemaFiles') | jq -r '.[]' >"$tmp_files"
+
+schema_def_name() {
+  printf '%s\n' "$1" |
+    sed 's/\.schema\.json$//' |
+    awk -F'[-.]' '{
+      out = ""
+      for (i = 1; i <= NF; i++) {
+        out = out toupper(substr($i, 1, 1)) substr($i, 2)
+      }
+      print out
+    }'
+}
+
+safe_cue_name() {
+  printf '%s\n' "$1" |
+    sed 's/\.schema\.json$//' |
+    tr '-' '_' |
+    tr '.' '_'
+}
+
+write_lock_to() {
+  out=$1
+  printf '[]\n' >"$tmp_files.json"
+
+  while IFS= read -r file; do
+    [ -f "$raw_dir/$file" ] || die "missing raw schema: $raw_dir/$file"
+    sha=$(sha256sum "$raw_dir/$file" | awk '{print $1}')
+    bytes=$(wc -c <"$raw_dir/$file" | tr -d ' ')
+    jq \
+      --arg path "$file" \
+      --arg sha "$sha" \
+      --argjson bytes "$bytes" \
+      '. + [{path: $path, sha256: $sha, bytes: $bytes}]' \
+      "$tmp_files.json" >"$tmp_files.lock"
+    mv "$tmp_files.lock" "$tmp_files.json"
+  done <"$tmp_files"
+
+  jq -n \
+    --arg version "$version" \
+    --arg ref "$ref" \
+    --slurpfile files "$tmp_files.json" \
+    '{
+      provider: "github.com/openai/codex",
+      schemaPath: "codex-rs/hooks/schema/generated",
+      schemaKind: "hooks-command",
+      codexCliVersion: $version,
+      providerRef: $ref,
+      files: $files[0]
+    }' >"$out"
+}
+
+check_generated_imports() {
+  while IFS= read -r file; do
+    safe=$(safe_cue_name "$file")
+    [ -f "$generated_cue_dir/$safe.cue" ] || die "missing imported CUE schema: $generated_cue_dir/$safe.cue"
+  done <"$tmp_files"
+}
+
+case "$mode" in
+  --sync)
+    mkdir -p "$raw_dir" "$generated_cue_dir"
+    rm -f "$generated_cue_dir"/*.cue
+
+    while IFS= read -r file; do
+      curl -fsSL "$base/$file" -o "$raw_dir/.$file.tmp.$$"
+      mv "$raw_dir/.$file.tmp.$$" "$raw_dir/$file"
+    done <"$tmp_files"
+
+    while IFS= read -r file; do
+      safe=$(safe_cue_name "$file")
+      def=$(schema_def_name "$file")
+
+      cue import jsonschema "$raw_dir/$file" -p cuerail -l "\"#$def\"" -o "$tmp_files.cue"
+      sed 's/^"#\([A-Za-z0-9_][A-Za-z0-9_]*\)": {$/#\1: {/' "$tmp_files.cue" >"$tmp_files.cue2"
+      mv "$tmp_files.cue2" "$generated_cue_dir/$safe.cue"
+      rm -f "$tmp_files.cue"
+    done <"$tmp_files"
+
+    mkdir -p "$lock_dir"
+    write_lock_to "$tmp_lock_json"
+    (cd "$CUERAIL_HOME" && cue vet "$CUE_PKG" "$tmp_lock_json" -d '#SchemaLock')
+    mv "$tmp_lock_json" "$lock_file"
+    (cd "$CUERAIL_HOME" && cue vet "$CUE_PKG")
+    ;;
+
+  --check)
+    [ -d "$raw_dir" ] || die "missing raw schema directory: $raw_dir"
+    [ -d "$generated_cue_dir" ] || die "missing imported CUE schema directory: $generated_cue_dir"
+    [ -f "$lock_file" ] || die "missing schema lock: $lock_file"
+
+    check_generated_imports
+    (cd "$CUERAIL_HOME" && cue vet "$CUE_PKG" "$lock_file" -d '#SchemaLock')
+    write_lock_to "$tmp_lock_json"
+    cmp -s "$tmp_lock_json" "$lock_file" || die "schema lock is stale: $lock_file"
+    (cd "$CUERAIL_HOME" && cue vet "$CUE_PKG")
+    ;;
+esac
+
+printf 'cuerail-schema-sync: %s %s\n' "${mode#--}" "$ref"

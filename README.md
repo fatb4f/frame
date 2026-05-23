@@ -46,11 +46,14 @@ $CODEX_HOME/tools/cuerail/
   bin/
     cuerail-hook
     cuerail-doctor
+    cuerail-schema-sync
 
   cue.mod/
     module.cue
 
   cue/
+    schema_sync.cue
+    schema_lock.cue
     codex_events.cue
     codex_inputs.cue
     codex_outputs.cue
@@ -58,6 +61,8 @@ $CODEX_HOME/tools/cuerail/
     capture_policy.cue
     turn.cue
     examples.cue
+    generated/
+      hooks/
 
   test/
     fixtures/
@@ -196,6 +201,7 @@ fixtures export #HookManifest.output
 fixtures export #HookManifest.capture.persist
 persisted manifest fixtures validate against turn.cue
 sh -n bin/cuerail-hook bin/cuerail-doctor
+schema cache/import availability via cuerail-schema-sync --check
 ```
 
 ## Superseded names

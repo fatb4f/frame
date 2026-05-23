@@ -4,3 +4,4 @@
 .cache/
 .out/
 frames/
+cue/generated/hooks/*.cue

@@ -26,19 +26,35 @@ esac
 [ ! -L "$CUERAIL_HOME" ] || die "CUERAIL_HOME must not be a symlink"
 [ -x "$CUERAIL_HOME/bin/cuerail-hook" ] || die "missing executable bin/cuerail-hook"
 [ -x "$CUERAIL_HOME/bin/cuerail-doctor" ] || die "missing executable bin/cuerail-doctor"
-[ -d "$CUERAIL_HOME/workflows/frame/cue" ] || die "missing CUE package"
+[ -x "$CUERAIL_HOME/bin/cuerail-schema-sync" ] || die "missing executable bin/cuerail-schema-sync"
+[ -d "$CUERAIL_HOME/cue" ] || die "missing active CUE package"
 
 need cue
+need awk
+need cmp
+need codex
+need curl
 need jq
 need mktemp
 need flock
+need mkdir
+need mv
+need rm
+need sed
+need sha256sum
+need tr
+need wc
 
 mkdir -p "$CUERAIL_TURNS"
 
 (
   cd "$CUERAIL_HOME"
-  cue vet ./workflows/frame/cue
-  cue export ./workflows/frame/cue -e '#ExampleCuerailInstallSurface' >/dev/null
+  cue vet ./cue
+  cue export ./cue -e '#ExpectedHookSchemaFiles' >/dev/null
+  cue export ./cue -e '#SchemaSync' >/dev/null
+  cue export ./cue -e '#ExampleSchemaLock' >/dev/null
 )
+
+"$CUERAIL_HOME/bin/cuerail-schema-sync" --check >/dev/null
 
 printf 'cuerail-doctor: ok\n'
