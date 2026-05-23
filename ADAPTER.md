@@ -1,258 +1,211 @@
-Approved correction.
+# cuerail Adapter Contract
 
-## Revised adapter contract
+`cuerail-hook` is a thin shell transport for CUE.
 
-```txt
-Shell:
-  executable compatibility only
+It does not own hook semantics, event routing, collector planning, or output
+construction. CUE owns validity, output shape, capture policy, and manifest
+structure.
 
-Python:
-  main Codex hook adapter
-  JSON parsing/validation
-  event dispatch
-  collector planning
-  output construction
-  trace writing
-
-CUE:
-  authoritative schema/projection layer
-
-git/rg:
-  low-level collectors, callable from Python
-```
-
-This adapter is installed globally under `$CODEX_HOME`. Repository checkouts are
-development sources; the runtime command surface is the installed global Codex
-home.
-
-The shape should be:
+## Runtime path
 
 ```txt
 Codex runtime
-  -> $CODEX_HOME/bin/frame-codex-hook
-     -> exec python adapter
-        -> validate CodexHookInput[event]
-        -> map event -> FrameHookIntent
-        -> build CollectorPlan
-        -> collectGit(opts) / collectRg(opts)
-        -> project evidence
-        -> emit CodexHookOutput[event]
+-> $CODEX_HOME/tools/cuerail/bin/cuerail-hook
+-> _hookInput CUE envelope
+-> #HookManifest
+-> #HookManifest.output
 ```
+
+## Shell responsibilities
+
+```txt
+read stdin into temp JSON
+wrap as {"_hookInput": <payload>} without interpreting semantics
+run cue export for #HookManifest.output
+run cue export for #HookManifest.capture.persist
+if capture.persist is true:
+  allocate sequence under lock
+  render #HookManifest with the pinned command
+  validate temporary manifest
+  atomically rename into the turn events directory
+print only #HookManifest.output JSON to stdout
+write diagnostics only to stderr
+```
+
+Using `jq` only to wrap the complete input payload under `_hookInput` is allowed.
+`jq` must not perform semantic hook parsing.
+
+## Required environment
+
+```sh
+: "${CODEX_HOME:?CODEX_HOME is required}"
+: "${CODEX_STATE:?CODEX_STATE is required}"
+: "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"
+
+CUERAIL_STATE="${CUERAIL_STATE:-$CODEX_STATE/cuerail}"
+CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_STATE/turns}"
+```
+
+No fallback roots are allowed in the hook path.
 
 ## Installed disk shape
 
 ```txt
-$CODEX_HOME/
+$CODEX_HOME/tools/cuerail/
   bin/
-    frame-codex-hook              # tiny shim
-    frame-doctor                  # install/runtime/schema doctor
+    cuerail-hook
+    cuerail-doctor
 
-  hooks.json                      # global Codex hook registration
+  cue.mod/
+    module.cue
 
-  tools/
-    frame/
-      frame/
-        __init__.py
+  cue/
+    codex_events.cue
+    codex_inputs.cue
+    codex_outputs.cue
+    hook_manifest.cue
+    capture_policy.cue
+    turn.cue
+    examples.cue
 
-        hooks/
-          __init__.py
-          adapter.py              # stdin/stdout hook entry
-          events.py               # event -> intent dispatch
-          outputs.py              # event-specific output builders
-          traces.py               # trace persistence
-
-        collectors/
-          __init__.py
-          git.py                  # collectGit(opts)
-          rg.py                   # collectRg(opts)
-          mcp.py                  # optional later collector normalization
-
-        evidence/
-          __init__.py
-          types.py                # Python-side typed envelopes, if useful
-          classify.py             # AdhocUsageEvent classifier
-
-      cue.mod/
-        module.cue
-
-      cue/
-        codex_hooks.cue           # CodexHookInput/Output
-        collectors.cue            # CollectorPlan/Result
-        evidence.cue              # GitEvidence/RgEvidence/ToolEvidence
-        turn_frame.cue            # TurnFrame projection
-        adhoc_usage.cue           # AdhocUsageEvent
-        traces.cue                # trace records
-        examples.cue
-
-      test/
-        fixtures/
-          hooks/
-            session-start.json
-            user-prompt-submit.json
-            post-tool-use.json
-            stop.json
+  test/
+    fixtures/
+      hooks/
+        session-start.json
+        user-prompt-submit.json
+        post-tool-use.mcp-ripgrep.json
+        post-tool-use.git-mcp-server.json
+        stop.json
 ```
 
-Development checkout shape may mirror `tools/frame/`, but hook execution must
-not depend on the current repository path.
+## Pinned CUE commands
 
-## Global hook registration
-
-```txt
-$CODEX_HOME/hooks.json
-  registers command hooks that call:
-    $CODEX_HOME/bin/frame-codex-hook
-```
-
-## `bin/frame-codex-hook`
+The exact commands are part of the contract and must be fixture-tested.
 
 ```sh
-#!/usr/bin/env sh
-set -eu
-
-: "${CODEX_HOME:=$HOME/.codex}"
-: "${FRAME_HOME:=$CODEX_HOME/tools/frame}"
-
-export CODEX_HOME FRAME_HOME
-exec python3 "$FRAME_HOME/frame/hooks/adapter.py" "$@"
+cue export "$CUERAIL_HOME/cue" "$wrapped_json" -e '#HookManifest.output'
+cue export "$CUERAIL_HOME/cue" "$wrapped_json" -e '#HookManifest.capture.persist'
 ```
 
-## Python owns these boundaries
+The persisted manifest command must be pinned by implementation tests. Preferred
+form, if supported by the installed CUE version:
 
-```txt
-adapter.py:
-  read stdin
-  decode JSON
-  dispatch by hook_event_name
-  catch failures
-  emit event-valid JSON when recovery is safe
-
-events.py:
-  SessionStart -> session_context
-  UserPromptSubmit -> turn_context
-  PreToolUse -> pre_tool_policy
-  PermissionRequest -> permission_policy
-  PostToolUse -> post_tool_capture
-  PreCompact -> pre_compact_gate
-  PostCompact -> post_compact_capture
-  SubagentStart -> subagent_context
-  SubagentStop -> subagent_capture
-  Stop -> completion_gate
-
-outputs.py:
-  build_session_start_output(...)
-  build_user_prompt_submit_output(...)
-  build_pre_tool_use_output(...)
-  build_permission_request_output(...)
-  build_post_tool_use_output(...)
-  build_pre_compact_output(...)
-  build_post_compact_output(...)
-  build_subagent_start_output(...)
-  build_subagent_stop_output(...)
-  build_stop_output(...)
+```sh
+cue export "$CUERAIL_HOME/cue" "$wrapped_json" -e '#HookManifest' --out cue
 ```
 
-## Initial implementation slice
+If that form is not supported or does not produce the desired manifest shape,
+use the tested fallback:
 
-```txt
-Slice 1:
-  SessionStart
-  UserPromptSubmit
-  PostToolUse
-  Stop
-
-Schema contract from the start:
-  model the full CodexHookInput / CodexHookOutput union
-  implement unsupported events as explicit no-op handlers or disabled bindings
-  do not silently treat unsupported events as successful policy decisions
+```sh
+cue eval "$CUERAIL_HOME/cue" "$wrapped_json" -e '#HookManifest'
 ```
+
+Do not leave persisted manifest rendering ambiguous.
 
 ## Failure behavior
 
+On CUE failure, the shell may inspect only `hook_event_name` to choose a
+hard-coded transport-safety fallback. This is not semantic routing; it exists to
+avoid malformed stdout.
+
+Context-capable hooks:
+
 ```txt
-Context hooks:
-  SessionStart
-  UserPromptSubmit
-  PostToolUse
-  SubagentStart
+SessionStart
+UserPromptSubmit
+PostToolUse
+SubagentStart
+```
 
-  On collector/projection failure:
-    record trace
-    emit event-valid JSON without additionalContext when safe
-    never emit malformed JSON
+Fallback: emit valid no-op output when a safe no-op exists, do not persist a
+manifest, and write diagnostics to stderr.
 
-Policy or gate hooks:
-  PreToolUse
-  PermissionRequest
-  Stop
-  SubagentStop
+Gate/policy hooks:
 
-  On validation/planning/gate failure:
-    fail closed when the event controls permission or completion
-    emit decision:block + reason when the schema supports it
-    otherwise exit non-zero with a concise stderr reason
+```txt
+PreToolUse
+PermissionRequest
+Stop
+SubagentStop
+```
+
+Fallback: emit valid block/deny output where the official schema supports it.
+If no valid fail-closed output is available, exit non-zero with concise stderr.
 
 Compact hooks:
-  PreCompact
-  PostCompact
-
-  On failure:
-    record trace
-    return event-valid no-op output or fail clearly if no valid output applies
-```
-
-## Collector rule
 
 ```txt
-collectGit(opts) and collectRg(opts) are reusable generic collectors.
-
-They do not know:
-  hook event semantics
-  whether context should be injected
-  whether Stop should block
-  whether an action is avoidable
-
-They only know:
-  mode
-  root
-  paths
-  query/base
-  budget
-  output schema
+PreCompact
+PostCompact
 ```
 
-## Shell remains acceptable only here
+Fallback: emit event-valid no-op output if the official schema permits it;
+otherwise fail clearly.
+
+## Atomic persistence protocol
 
 ```txt
-Good shell uses:
-  bin/frame-codex-hook shim
-  bin/frame-doctor if simple
-  maybe direct fallback wrappers during migration
-
-Bad shell uses:
-  main hook adapter
-  event-specific output builders
-  JSON/schema normalization
-  trace classification
-  MCP output rewriting
+turn root = $CODEX_STATE/cuerail/turns/<session_id>/<turn_id>
+events root = $turn_root/events
+lock file = $turn_root/.lock
+sequence = next integer allocated while holding lock
+filename = <seq>-<event>-<safe-tool-name>.cue
 ```
 
-## Final approved implementation shape
+Rules:
 
 ```txt
-Generic:
-  $CODEX_HOME/bin/frame-codex-hook shim
-  Python adapter kernel
-  collectGit(opts)
-  collectRg(opts)
-  shared trace envelope
-
-Typed:
-  event-specific input schemas
-  event-specific output schemas
-  collector item payloads
-  collector plans
-  TurnFrame / ToolEvidence / AdhocUsageEvent projections
+uncaptured events do not consume sequence numbers
+write manifest to temp file in the target directory
+validate temp manifest
+rename temp file atomically
+never write partial final files
 ```
 
-This is the right point to proceed to slices.
+## Doctor gates
+
+`cuerail-doctor` checks:
+
+```txt
+CODEX_HOME and CODEX_STATE are set
+CUERAIL_HOME resolves to $CODEX_HOME/tools/cuerail unless overridden
+CUERAIL_STATE and CUERAIL_TURNS are writable or creatable
+cue, jq, mktemp, flock, mv, mkdir, chmod are available
+official schema source exists
+CUE schema internalization is current against official generated schemas
+cue vet ./cue
+each fixture exports #HookManifest.output
+each fixture exports #HookManifest.capture.persist
+persisted manifest fixtures validate through turn.cue
+sh -n bin/cuerail-hook bin/cuerail-doctor
+```
+
+## Slice 1 exclusions
+
+Do not implement these in the adapter slice:
+
+```txt
+Python dispatch
+collector plans
+hook-owned git/rg collectors
+derived telemetry schemas
+classification or promotion logic
+```
+
+## Superseded adapter references
+
+The previous adapter proposal used these names and responsibilities. They are
+superseded history, not active adapter design:
+
+```txt
+frame-codex-hook
+frame-doctor
+FRAME_HOME
+Python-owned hook adapter
+collectGit(opts)
+collectRg(opts)
+repo-frame
+repo-rg
+repo-git
+```

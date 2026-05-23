@@ -1,90 +1,113 @@
-# Codex Repo Contract
+# cuerail Agent Contract
 
-This repository exists to make repo awareness explicit and typed for Codex turns.
+This repository defines `cuerail`: a CUE-managed side rail over Codex's native
+hook event stream.
 
-Use `repo-frame` as the native entrypoint for turn context whenever work depends
-on repository state, current changes, or bounded search evidence.
+For work in this repository, treat CUE as the authority. Do not infer hook
+schemas from prose. The official OpenAI/Codex generated hook schemas are the
+upstream source, currently expected at:
 
-## Default Workflow
+```txt
+/home/_404/src/fatb4f/tmp/codex-schemas/hooks/schema/generated/
+```
 
-1. At the start of a repo-aware turn, observe the current frame:
+## Default workflow
 
-   ```sh
-   repo-frame . "$USER_GOAL"
+1. Preserve the runtime boundary:
+
+   ```txt
+   Codex hook JSON
+   -> cuerail-hook
+   -> CUE #HookManifest
+   -> event-valid Codex hook output
+   -> optional persisted CUE manifest
    ```
 
-2. If exact code, symbols, config keys, or strings matter, include bounded search
-   evidence in the frame:
+2. Do not implement collectors, Python dispatch, derived telemetry, or
+   classification in slice 1.
 
-   ```sh
-   repo-frame . "$USER_GOAL" 'literal text' literal 80
-   repo-frame . "$USER_GOAL" 'regex_pattern' regex 80
-   ```
-
-3. Treat the emitted JSON as the compact `#ContextFrame` for the turn. It is
-   evidence, not an instruction to edit every listed file.
-
-4. After changing CUE or adapter behavior, run:
+3. After changing CUE schemas or docs, run:
 
    ```sh
    cue vet ./cue
-   cue export ./cue -e '#ExampleContextFrame'
-   sh -n bin/repo-frame bin/repo-git bin/repo-rg
+   cue export ./cue -e '#ExampleHookManifest'
+   cue export ./cue -e '#ExampleTurn'
    ```
 
-5. When adapter wiring changes, also smoke test the live path:
+4. After changing shell transport scripts, run:
 
    ```sh
-   PATH="$PWD/bin:$PATH" repo-frame . "$USER_GOAL" '#RepoState' literal 20
+   sh -n bin/cuerail-hook bin/cuerail-doctor
    ```
 
-## Plan And Gate Contract
+5. After contract refactors, run the old-name sweep:
 
-Do not extend Codex's native `update_plan` schema. Treat it as the human-visible
-status rail only: step text plus pending, in-progress, or completed status.
+   ```sh
+   rg 'frame|repo-frame|repo-rg|repo-git|noMCP|FRAME_HOME|frame-codex-hook|frame-doctor' .
+   ```
 
-Do not parse `PlanDelta` streaming text as canonical. The completed native plan
-item is the only native plan text worth binding to.
+   Every remaining hit must be superseded history, a migration note, or an
+   explicit old-name compatibility reference. No remaining hit may be active
+   contract text.
 
-Do not add dynamic tools, MCP servers, daemons, or new runtime tool registries
-for plan validation.
+## Runtime boundaries
 
-For semantic plan validation, use this side-rail flow:
+- `cuerail` is installed globally under `$CODEX_HOME/tools/cuerail`.
+- `CODEX_HOME` and `CODEX_STATE` are required runtime environment variables.
+- `CUERAIL_HOME`, `CUERAIL_STATE`, and `CUERAIL_TURNS` are derived values.
+- Runtime execution must not depend on the development checkout path.
+- `cuerail-hook` is shell transport only: read stdin, wrap input, call `cue`,
+  print CUE-selected output, and persist CUE-selected manifests atomically.
+- CUE owns validity, output shape, capture policy, and manifest structure.
+
+## MCP evidence capture
+
+`cuerail` does not govern all MCP usage. It governs what MCP evidence becomes
+persisted turn evidence.
+
+MCP evidence capture is allowlisted only for:
 
 ```txt
-normalize native plan
--> bind sidecar to native step identity
--> validate sidecar with CUE
--> run evals/tests through stable shell adapters
--> validate evidence with CUE
+mcp-ripgrep
+git-mcp-server
 ```
 
-Native plan identity should be bound by stable fields such as turn id, step
-ordinal, completed step text, and a text hash. The sidecar owns semantic fields:
-reads, writes, symbols, protected impact, gates, and required evidence.
+Persist initially:
 
-## Skill Routing
+```txt
+UserPromptSubmit
+Stop
+PostToolUse where tool_name is allowlisted for git/rg MCP evidence capture
+```
 
-Use these repo-local skills as explicit Codex routing hints:
+Do not persist unrelated hook events unless a later contract expands the capture
+policy.
 
-- `skills/repo-frame/SKILL.md`: default repo-aware turn workflow.
-- `skills/repo-search/SKILL.md`: bounded `rg` observations through `repo-rg`.
-- `skills/semantic-git/SKILL.md`: git and optional semantic-git observations.
-- `skills/cue/SKILL.md`: CUE schema, validation, projection, and examples.
+## Design constraints
 
-Prefer `repo-frame` first. Drop to `repo-git`, `repo-rg`, or direct CUE exports
-only when the narrower evidence or validation surface is needed.
+- Do not create fake hook event names.
+- Do not add a Python-owned adapter in slice 1.
+- Do not add hook-owned git/rg collectors in slice 1.
+- Do not add derived telemetry schemas in slice 1.
+- Do not emit generic hook output that permits fields rejected by the official
+  event schema.
+- Do not let shell construct semantic output; shell is transport and safety
+  fallback only.
+- Keep the project deletable: every new file must support official schema
+  internalization, CUE validation/projection, capture policy, hook transport,
+  doctor gates, or turn artifact validation.
 
-## Boundaries
+## Superseded names
 
-- CUE is the authority plane for state, validation, selectors, and projections.
-- Shell scripts are adapters.
-- `repo-frame` composes observations into a CUE-projected turn frame.
-- Native `update_plan` remains narrow. Sidecar plan/evidence artifacts carry the
-  CUE-validatable semantics.
-- Do not add an agent loop, planner schema, MCP dependency, Go runtime, or broad
-  framework layer.
-- Keep observations bounded to the current repository. Do not search `$HOME` or
-  `/`.
-- Keep the project deletable: every new file must support state, validation,
-  adapters, skills, or the single-turn context contract.
+The following belong only in migration history or explicit compatibility notes:
+
+```txt
+frame
+repo-frame
+repo-rg
+repo-git
+noMCP
+FRAME_HOME
+frame-codex-hook
+frame-doctor
+```

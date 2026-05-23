@@ -1,143 +1,171 @@
-Accepted correction. The implementation-ready output taxonomy should be:
+# cuerail Model
 
-```txt id="q89syo"
-Context-capable:
-  SessionStart
-  UserPromptSubmit
-  PreToolUse
-  PostToolUse
-  SubagentStart
+`cuerail` models Codex hook invocations as CUE values.
 
-Permission-special:
-  PermissionRequest
-
-No hookSpecificOutput:
-  PreCompact
-  PostCompact
-  SubagentStop
-  Stop
+```txt
+CodexHookInput JSON
+-> _hookInput CUE value
+-> #HookManifest
+-> #HookManifest.output JSON for Codex
+-> optional persisted CUE manifest
 ```
 
-## Final output schema split
+The output is a CUE value internally. It is serialized to JSON only because the
+Codex hook protocol expects JSON stdout.
 
-```cue id="d7hacp"
-#CodexHookOutput:
-	#SessionStartOutput |
-	#UserPromptSubmitOutput |
-	#PreToolUseOutput |
-	#PermissionRequestOutput |
-	#PostToolUseOutput |
-	#PreCompactOutput |
-	#PostCompactOutput |
-	#SubagentStartOutput |
-	#SubagentStopOutput |
-	#StopOutput
+## Event names
+
+```cue
+#CodexHookEvent:
+  "SessionStart" |
+  "UserPromptSubmit" |
+  "PreToolUse" |
+  "PermissionRequest" |
+  "PostToolUse" |
+  "PreCompact" |
+  "PostCompact" |
+  "SubagentStart" |
+  "SubagentStop" |
+  "Stop"
 ```
 
-## Context-capable outputs
+These names are the native Codex hook events. Do not add local runtime event
+names.
 
-```cue id="o4h9qs"
-#ContextHookSpecificOutput: {
-	hookEventName: "SessionStart" | "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "SubagentStart"
-	additionalContext?: string
-}
+## Schema authority
 
-#SessionStartOutput: #CommonHookOutput & {
-	hookSpecificOutput?: #ContextHookSpecificOutput & {
-		hookEventName: "SessionStart"
-	}
-}
+CUE hook schemas are generated from or checked against the official OpenAI/Codex
+schema artifacts currently expected at:
 
-#UserPromptSubmitOutput: #CommonHookOutput & {
-	decision?: "block"
-	reason?: string
-	hookSpecificOutput?: #ContextHookSpecificOutput & {
-		hookEventName: "UserPromptSubmit"
-	}
-}
+```txt
+/home/_404/src/fatb4f/tmp/codex-schemas/hooks/schema/generated/
+```
 
-#PreToolUseOutput: #CommonHookOutput & {
-	decision?: "approve" | "block"
-	reason?: string
-	hookSpecificOutput?: {
-		hookEventName: "PreToolUse"
-		additionalContext?: string
-		permissionDecision?: "allow" | "deny" | "ask"
-		updatedInput?: _
-	}
-}
+Where prose conflicts with generated schemas, generated schemas win.
 
-#PostToolUseOutput: #CommonHookOutput & {
-	decision?: "block"
-	reason?: string
-	hookSpecificOutput?: {
-		hookEventName: "PostToolUse"
-		additionalContext?: string
-		updatedMCPToolOutput?: _
-	}
-}
+## Hook manifest
 
-#SubagentStartOutput: #CommonHookOutput & {
-	hookSpecificOutput?: #ContextHookSpecificOutput & {
-		hookEventName: "SubagentStart"
-	}
+```cue
+_hookInput: _
+
+#HookManifest: {
+  input: #CodexHookInput & _hookInput
+  output: #CodexHookOutput & #OutputForInput
+  capture: #CaptureDecision & {
+    event: input.hook_event_name
+  }
 }
 ```
 
-## Permission-special output
+`#OutputForInput` is event-specific. A shared output type must not admit fields
+that any event rejects.
 
-```cue id="scicpe"
-#PermissionRequestOutput: #CommonHookOutput & {
-	hookSpecificOutput?: {
-		hookEventName: "PermissionRequest"
-		decision?: "allow" | "deny" | "ask"
-	}
+## Output taxonomy
+
+Context-capable outputs:
+
+```txt
+SessionStart
+UserPromptSubmit
+PreToolUse
+PostToolUse
+SubagentStart
+```
+
+Permission-special output:
+
+```txt
+PermissionRequest
+```
+
+`PermissionRequest` follows the official generated schema shape. In particular,
+do not use simplified prose forms when the official output schema uses nested
+permission decision fields.
+
+No `hookSpecificOutput`:
+
+```txt
+PreCompact
+PostCompact
+SubagentStop
+Stop
+```
+
+## Capture policy model
+
+```cue
+#CapturePolicy: {
+  events: {
+    UserPromptSubmit: true
+    Stop: true
+
+    PostToolUse: {
+      enabled: true
+      toolNames: ["mcp-ripgrep", "git-mcp-server"]
+
+      budget: {
+        maxToolInputBytes:  int | *16384
+        maxToolOutputBytes: int | *65536
+        maxManifestBytes:   int | *98304
+      }
+
+      redaction: {
+        enabled: bool | *true
+        denyPatterns: [...string]
+      }
+
+      onOversize: "truncate" | "reject" | *"reject"
+    }
+  }
 }
 ```
 
-No `additionalContext` here.
+The allowlist is for persisted MCP evidence capture only. It does not restrict
+unrelated Codex MCP tool usage.
 
-## No `hookSpecificOutput`
+## Turn artifact model
 
-```cue id="ixlv84"
-#PreCompactOutput: #CommonHookOutput
+A turn is a directory of captured hook manifests:
 
-#PostCompactOutput: #CommonHookOutput
-
-#SubagentStopOutput: #CommonHookOutput & {
-	decision?: "block"
-	reason?: string
-}
-
-#StopOutput: #CommonHookOutput & {
-	decision?: "block"
-	reason?: string
-}
+```txt
+$CODEX_STATE/cuerail/turns/<session_id>/<turn_id>/
+  events/
+    000001-user-prompt-submit.cue
+    000002-post-tool-use.mcp-ripgrep.cue
+    000003-post-tool-use.git-mcp-server.cue
+    000004-stop.cue
+  turn.cue
 ```
 
-## Final approved boundary
+`turn.cue` validates ordering, event names, session consistency, turn
+consistency where present, manifest shape, and capture policy results.
 
-```txt id="u8lk71"
-Generic:
-  frame-codex-hook
-  collectGit(opts)
-  collectRg(opts)
-  shared result base
-  trace envelope
+## Slice 1 exclusions
 
-Typed:
-  hook inputs
-  hook outputs
-  collector item payloads
-  collector plans
-  evidence projections
+Do not add these in slice 1:
+
+```txt
+collector plans
+hook-owned git/rg collectors
+Python adapter dispatch
+derived telemetry schemas
+classification or promotion logic
 ```
 
-## Implementation invariant
+Later consumers may read the captured turn artifact and derive views from it,
+but the slice-1 runtime product is the CUE-valid manifest set.
 
-```txt id="ch5l59"
-A hook handler may share code.
-A hook output may not share invalid fields.
+## Superseded model references
+
+The previous model used old names and shell/Python adapter ideas. These terms are
+not active model names:
+
+```txt
+frame
+repo-frame
+repo-rg
+repo-git
+FRAME_HOME
+frame-codex-hook
+frame-doctor
 ```
-
-This is the adapter contract to implement.
