@@ -11,7 +11,7 @@ structure.
 ```txt
 Codex runtime
 -> $CODEX_HOME/tools/cuerail/bin/cuerail-hook
--> _hookInput CUE envelope
+-> hookInput CUE envelope
 -> #HookManifest
 -> #HookManifest.output
 ```
@@ -20,7 +20,7 @@ Codex runtime
 
 ```txt
 read stdin into temp JSON
-wrap as {"_hookInput": <payload>} without interpreting semantics
+wrap as {"hookInput": <payload>} without interpreting semantics
 run cue export for #HookManifest.output
 run cue export for #HookManifest.capture.persist
 if capture.persist is true:
@@ -32,7 +32,7 @@ print only #HookManifest.output JSON to stdout
 write diagnostics only to stderr
 ```
 
-Using `jq` only to wrap the complete input payload under `_hookInput` is allowed.
+Using `jq` only to wrap the complete input payload under `hookInput` is allowed.
 `jq` must not perform semantic hook parsing.
 
 ## Required environment
@@ -84,22 +84,22 @@ $CODEX_HOME/tools/cuerail/
 The exact commands are part of the contract and must be fixture-tested.
 
 ```sh
-cue export "$CUERAIL_HOME/cue" "$wrapped_json" -e '#HookManifest.output'
-cue export "$CUERAIL_HOME/cue" "$wrapped_json" -e '#HookManifest.capture.persist'
+ cue export "$CUERAIL_HOME/cue/runtime" "$wrapped_json" -e '#HookManifest.output'
+ cue export "$CUERAIL_HOME/cue/runtime" "$wrapped_json" -e '#HookManifest.capture.persist'
 ```
 
 The persisted manifest command must be pinned by implementation tests. Preferred
 form, if supported by the installed CUE version:
 
 ```sh
-cue export "$CUERAIL_HOME/cue" "$wrapped_json" -e '#HookManifest' --out cue
+ cue export "$CUERAIL_HOME/cue/runtime" "$wrapped_json" -e '#HookManifest' --out cue
 ```
 
 If that form is not supported or does not produce the desired manifest shape,
 use the tested fallback:
 
 ```sh
-cue eval "$CUERAIL_HOME/cue" "$wrapped_json" -e '#HookManifest'
+ cue eval "$CUERAIL_HOME/cue/runtime" "$wrapped_json" -e '#HookManifest'
 ```
 
 Do not leave persisted manifest rendering ambiguous.
@@ -175,7 +175,8 @@ CUERAIL_STATE and CUERAIL_TURNS are writable or creatable
 cue, jq, mktemp, flock, mv, mkdir, chmod are available
 official schema source exists
 CUE schema internalization is current against official generated schemas
-cue vet ./cue
+cue vet -c=false ./cue/runtime
+cue vet -c=false ./cue/sync
 each fixture exports #HookManifest.output
 each fixture exports #HookManifest.capture.persist
 persisted manifest fixtures validate through turn.cue

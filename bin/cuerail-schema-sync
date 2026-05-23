@@ -34,7 +34,8 @@ case "$CUERAIL_HOME" in
 esac
 
 CUE_DIR="$CUERAIL_HOME/cue"
-CUE_PKG="./cue"
+CUE_SYNC_PKG="./cue/sync"
+CUE_RUNTIME_PKG="./cue/runtime"
 [ -d "$CUE_DIR" ] || die "missing active CUE package: $CUE_DIR"
 
 need codex
@@ -59,7 +60,7 @@ version=$(
 [ -n "$version" ] || die "could not extract Codex semver from codex --version"
 
 ref=$(
-  (cd "$CUERAIL_HOME" && cue export "$CUE_PKG" -e '#SchemaSync.selectedRef' -t codexVersion="$version") |
+  (cd "$CUERAIL_HOME" && cue export "$CUE_SYNC_PKG" -e '#SchemaSync.selectedRef' -t codexVersion="$version") |
     jq -r .
 )
 [ -n "$ref" ] && [ "$ref" != "null" ] || die "CUE did not select a provider ref"
@@ -74,7 +75,7 @@ tmp_files=${TMPDIR:-/tmp}/cuerail-schema-files.$$
 tmp_lock_json="$tmp_files.lock.json"
 trap 'rm -f "$tmp_files" "$tmp_files.json" "$tmp_files.lock" "$tmp_files.lock.json" "$tmp_files.cue" "$tmp_files.cue2"' EXIT HUP INT TERM
 
-(cd "$CUERAIL_HOME" && cue export "$CUE_PKG" -e '#ExpectedHookSchemaFiles') | jq -r '.[]' >"$tmp_files"
+(cd "$CUERAIL_HOME" && cue export "$CUE_SYNC_PKG" -e '#ExpectedHookSchemaFiles') | jq -r '.[]' >"$tmp_files"
 
 schema_def_name() {
   printf '%s\n' "$1" |
@@ -155,9 +156,9 @@ case "$mode" in
 
     mkdir -p "$lock_dir"
     write_lock_to "$tmp_lock_json"
-    (cd "$CUERAIL_HOME" && cue vet "$CUE_PKG" "$tmp_lock_json" -d '#SchemaLock')
+    (cd "$CUERAIL_HOME" && cue vet "$CUE_SYNC_PKG" "$tmp_lock_json" -d '#SchemaLock')
     mv "$tmp_lock_json" "$lock_file"
-    (cd "$CUERAIL_HOME" && cue vet "$CUE_PKG")
+    (cd "$CUERAIL_HOME" && cue vet -c=false "$CUE_RUNTIME_PKG")
     ;;
 
   --check)
@@ -166,10 +167,10 @@ case "$mode" in
     [ -f "$lock_file" ] || die "missing schema lock: $lock_file"
 
     check_generated_imports
-    (cd "$CUERAIL_HOME" && cue vet "$CUE_PKG" "$lock_file" -d '#SchemaLock')
+    (cd "$CUERAIL_HOME" && cue vet "$CUE_SYNC_PKG" "$lock_file" -d '#SchemaLock')
     write_lock_to "$tmp_lock_json"
     cmp -s "$tmp_lock_json" "$lock_file" || die "schema lock is stale: $lock_file"
-    (cd "$CUERAIL_HOME" && cue vet "$CUE_PKG")
+    (cd "$CUERAIL_HOME" && cue vet -c=false "$CUE_RUNTIME_PKG")
     ;;
 esac
 

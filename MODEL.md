@@ -4,7 +4,7 @@
 
 ```txt
 CodexHookInput JSON
--> _hookInput CUE value
+-> hookInput CUE value
 -> #HookManifest
 -> #HookManifest.output JSON for Codex
 -> optional persisted CUE manifest
@@ -46,10 +46,10 @@ Where prose conflicts with generated schemas, generated schemas win.
 ## Hook manifest
 
 ```cue
-_hookInput: _
+hookInput: _
 
 #HookManifest: {
-  input: #CodexHookInput & _hookInput
+  input: #CodexHookInput & hookInput
   output: #CodexHookOutput & #OutputForInput
   capture: #CaptureDecision & {
     event: input.hook_event_name

@@ -19,19 +19,19 @@ command -v jq >/dev/null 2>&1 || die "missing required command: jq"
 input_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook.XXXXXX.json")
 wrapped_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-wrapped.XXXXXX.json")
 output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-output.XXXXXX.json")
-trap 'rm -f "$input_json"' EXIT HUP INT TERM
+trap 'rm -f "$input_json" "$wrapped_json" "$output_json"' EXIT HUP INT TERM
 
 cat >"$input_json"
 
 event_name=$(jq -r '.hook_event_name // empty' "$input_json") || die "invalid hook JSON"
 
-jq -c '{_hookInput: .}' "$input_json" >"$wrapped_json" || die "could not wrap hook JSON"
+jq -c '{hookInput: .}' "$input_json" >"$wrapped_json" || die "could not wrap hook JSON"
 
 if (
   cd "$CUERAIL_HOME" &&
-  cue export ./cue "$wrapped_json" -e '#HookManifest' >"$output_json"
+  cue export ./cue/runtime "$wrapped_json" -e '#HookManifest.output' >"$output_json"
 ); then
-  jq -c '.output' "$output_json"
+  cat "$output_json"
   exit 0
 fi
 

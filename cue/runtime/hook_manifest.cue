@@ -2,9 +2,11 @@ package cuerail
 
 import hooks "github.com/fatb4f/cuerail/cue/generated/hooks"
 
-_hookInput: {
+hookInput: {
 	hook_event_name!: #CodexHookEvent
 }
+
+_hookInput: hookInput
 
 #HookInputByEvent: {
 	"SessionStart":      hooks.#SessionStartCommandInput

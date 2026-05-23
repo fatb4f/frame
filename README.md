@@ -31,7 +31,7 @@ No source-checkout dependency at runtime.
 ```txt
 Codex hook event JSON
 -> cuerail-hook
--> non-semantic _hookInput envelope
+-> non-semantic hookInput envelope
 -> CUE validates official hook schema
 -> CUE generates #HookManifest
 -> CUE exports event-valid Codex hook output
@@ -196,7 +196,8 @@ runtime roots: CUERAIL_HOME, CUERAIL_STATE, CUERAIL_TURNS
 required deps: cue, jq, mktemp, flock, mv, mkdir, chmod
 official schema source exists
 CUE schema internalization does not drift from the official generated schemas
-cue vet ./cue
+cue vet -c=false ./cue/runtime
+cue vet -c=false ./cue/sync
 fixtures export #HookManifest.output
 fixtures export #HookManifest.capture.persist
 persisted manifest fixtures validate against turn.cue

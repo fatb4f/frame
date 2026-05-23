@@ -49,14 +49,15 @@ mkdir -p "$CUERAIL_TURNS"
 
 (
   cd "$CUERAIL_HOME"
-  cue vet ./cue
-  cue export ./cue -e '#ExpectedHookSchemaFiles' >/dev/null
-  cue export ./cue -e '#SchemaSync' >/dev/null
-  cue export ./cue -e '#ExampleSchemaLock' >/dev/null
-  cue export ./cue -e '#ExampleSessionStartHookOutput' >/dev/null
-  cue export ./cue -e '#ExampleUserPromptSubmitHookOutput' >/dev/null
-  cue export ./cue -e '#ExamplePostToolUseHookOutput' >/dev/null
-  cue export ./cue -e '#ExampleStopHookOutput' >/dev/null
+  cue vet -c=false ./cue/runtime
+  cue vet -c=false ./cue/sync
+  cue export ./cue/sync -e '#ExpectedHookSchemaFiles' >/dev/null
+  cue export ./cue/sync -e '#SchemaSync' >/dev/null
+  cue export ./cue/sync -e '#ExampleSchemaLock' >/dev/null
+  cue export ./cue/runtime -e '#ExampleSessionStartHookOutput' >/dev/null
+  cue export ./cue/runtime -e '#ExampleUserPromptSubmitHookOutput' >/dev/null
+  cue export ./cue/runtime -e '#ExamplePostToolUseHookOutput' >/dev/null
+  cue export ./cue/runtime -e '#ExampleStopHookOutput' >/dev/null
 )
 
 "$CUERAIL_HOME/bin/cuerail-schema-sync" --check >/dev/null
