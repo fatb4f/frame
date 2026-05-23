@@ -10,6 +10,11 @@ need() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
 
+cleanup_temp_files() {
+  [ -n "${output_json:-}" ] && rm -f "$output_json"
+  [ -n "${stderr_log:-}" ] && rm -f "$stderr_log"
+}
+
 : "${CODEX_HOME:?CODEX_HOME is required}"
 : "${CODEX_STATE:?CODEX_STATE is required}"
 : "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"
@@ -45,6 +50,8 @@ need sha256sum
 need tr
 need wc
 
+trap cleanup_temp_files EXIT HUP INT TERM
+
 mkdir -p "$CUERAIL_TURNS"
 
 (
@@ -60,6 +67,27 @@ mkdir -p "$CUERAIL_TURNS"
   cue export ./cue/runtime -e '#ExampleStopHookOutput' >/dev/null
 )
 
+for fixture in "$CUERAIL_HOME"/test/fixtures/hooks/*.json; do
+  [ -f "$fixture" ] || continue
+
+  output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-hook-output.XXXXXX.json")
+  stderr_log=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-hook-stderr.XXXXXX.log")
+
+  if ! "$CUERAIL_HOME/bin/cuerail-hook" <"$fixture" >"$output_json" 2>"$stderr_log"; then
+    die "fixture hook run failed: $(basename "$fixture")"
+  fi
+
+  jq -e . "$output_json" >/dev/null
+
+  if [ -n "$(sed -n '/cuerail-hook: using fallback for /p' "$stderr_log")" ]; then
+    die "fixture used fallback: $(basename "$fixture")"
+  fi
+
+  rm -f "$output_json" "$stderr_log"
+done
+
+output_json=
+stderr_log=
 "$CUERAIL_HOME/bin/cuerail-schema-sync" --check >/dev/null
 
 printf 'cuerail-doctor: ok\n'

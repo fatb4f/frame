@@ -36,6 +36,7 @@ if (
 fi
 
 fallback_output() {
+  printf 'cuerail-hook: using fallback for %s\n' "$event_name" >&2
   case "$1" in
     SessionStart|UserPromptSubmit|PostToolUse|PreCompact|PostCompact|SubagentStart)
       printf '{}\n'

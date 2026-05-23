@@ -179,6 +179,7 @@ cue vet -c=false ./cue/runtime
 cue vet -c=false ./cue/sync
 each fixture exports #HookManifest.output
 each fixture exports #HookManifest.capture.persist
+each supported fixture runs through cuerail-hook without fallback
 persisted manifest fixtures validate through turn.cue
 sh -n bin/cuerail-hook bin/cuerail-doctor bin/cuerail-schema-sync
 ```
