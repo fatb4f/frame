@@ -6,6 +6,43 @@ die() {
   exit 1
 }
 
+cleanup_temp_files() {
+  [ -n "${input_json:-}" ] && rm -f "$input_json"
+  [ -n "${wrapped_json:-}" ] && rm -f "$wrapped_json"
+  [ -n "${output_json:-}" ] && rm -f "$output_json"
+  [ -n "${persist_json:-}" ] && rm -f "$persist_json"
+  [ -n "${manifest_cue:-}" ] && rm -f "$manifest_cue"
+  return 0
+}
+
+safe_component() {
+  printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_'
+}
+
+event_slug() {
+  case "$1" in
+    UserPromptSubmit)
+      printf 'user-prompt-submit'
+      ;;
+    Stop)
+      printf 'stop'
+      ;;
+    PostToolUse)
+      case "$2" in
+        mcp-ripgrep|git-mcp-server)
+          printf 'post-tool-use.%s' "$2"
+          ;;
+        *)
+          printf 'post-tool-use'
+          ;;
+      esac
+      ;;
+    *)
+      printf '%s' "$1" | sed 's/\([a-z0-9]\)\([A-Z]\)/\1-\2/g' | tr '[:upper:]' '[:lower:]'
+      ;;
+  esac
+}
+
 : "${CODEX_HOME:?CODEX_HOME is required}"
 : "${CODEX_STATE:?CODEX_STATE is required}"
 : "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"
@@ -15,22 +52,81 @@ CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_STATE/turns}"
 export CODEX_HOME CODEX_STATE CUERAIL_HOME CUERAIL_STATE CUERAIL_TURNS
 
 command -v jq >/dev/null 2>&1 || die "missing required command: jq"
+command -v cue >/dev/null 2>&1 || die "missing required command: cue"
+command -v flock >/dev/null 2>&1 || die "missing required command: flock"
+command -v mkdir >/dev/null 2>&1 || die "missing required command: mkdir"
+command -v mktemp >/dev/null 2>&1 || die "missing required command: mktemp"
+command -v mv >/dev/null 2>&1 || die "missing required command: mv"
+command -v rm >/dev/null 2>&1 || die "missing required command: rm"
+command -v sed >/dev/null 2>&1 || die "missing required command: sed"
+command -v tr >/dev/null 2>&1 || die "missing required command: tr"
 
 input_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook.XXXXXX.json")
 wrapped_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-wrapped.XXXXXX.json")
 output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-output.XXXXXX.json")
-trap 'rm -f "$input_json" "$wrapped_json" "$output_json"' EXIT HUP INT TERM
+persist_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-persist.XXXXXX.json")
+manifest_cue=
+trap cleanup_temp_files EXIT HUP INT TERM
 
 cat >"$input_json"
 
 event_name=$(jq -r '.hook_event_name // empty' "$input_json") || die "invalid hook JSON"
+tool_name=$(jq -r '.tool_name // empty' "$input_json") || die "invalid hook JSON"
 
 jq -c '{hookInput: .}' "$input_json" >"$wrapped_json" || die "could not wrap hook JSON"
 
 if (
   cd "$CUERAIL_HOME" &&
-  cue export ./cue/runtime "$wrapped_json" -e '#HookManifest.output' >"$output_json"
+  cue export ./cue/runtime "$wrapped_json" -e '#HookManifest.output' >"$output_json" &&
+  cue export ./cue/runtime "$wrapped_json" -e '#HookManifest.capture.persist' >"$persist_json"
 ); then
+  persist=$(jq -r 'if . == true then "true" else "false" end' "$persist_json") ||
+    die "invalid capture persist output"
+
+  if [ "$persist" = "true" ]; then
+    session_id=$(jq -r '.session_id // empty' "$input_json") || die "invalid hook JSON"
+    turn_id=$(jq -r '.turn_id // empty' "$input_json") || die "invalid hook JSON"
+
+    [ -n "$session_id" ] || die "persisted hook missing session_id"
+    [ -n "$turn_id" ] || die "persisted hook missing turn_id"
+
+    safe_session=$(safe_component "$session_id")
+    safe_turn=$(safe_component "$turn_id")
+    slug=$(event_slug "$event_name" "$tool_name")
+    turn_dir="$CUERAIL_TURNS/$safe_session/$safe_turn"
+    events_dir="$turn_dir/events"
+
+    mkdir -p "$events_dir" || die "could not create turn events directory"
+
+    (
+      flock -x 9 || die "could not lock turn directory"
+
+      next_seq=1
+      for existing_event in "$events_dir"/[0-9][0-9][0-9][0-9][0-9][0-9]-*.cue; do
+        [ -e "$existing_event" ] || continue
+        base_name=${existing_event##*/}
+        seq_text=${base_name%%-*}
+        seq_value=$(printf '%s' "$seq_text" | sed 's/^0*//')
+        [ -n "$seq_value" ] || seq_value=0
+        [ "$seq_value" -lt "$next_seq" ] || next_seq=$((seq_value + 1))
+      done
+
+      seq_name=$(printf '%06d' "$next_seq")
+      manifest_cue=$(mktemp "$events_dir/.tmp.XXXXXX.cue") ||
+        die "could not create temporary manifest"
+
+      (
+        cd "$CUERAIL_HOME" &&
+        cue export ./cue/runtime "$wrapped_json" -e '#HookManifest' --out cue >"$manifest_cue" &&
+        cue vet -c=false ./cue/runtime "$manifest_cue" -d '#HookManifest'
+      ) || die "could not export or validate hook manifest"
+
+      mv "$manifest_cue" "$events_dir/$seq_name-$slug.cue" ||
+        die "could not publish hook manifest"
+      manifest_cue=
+    ) 9>"$turn_dir/.lock"
+  fi
+
   cat "$output_json"
   exit 0
 fi

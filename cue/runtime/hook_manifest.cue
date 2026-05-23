@@ -43,6 +43,8 @@ _hookInput: hookInput
 	#SubagentStopHookManifest |
 	#StopHookManifest
 
+#McpEvidenceTool: "mcp-ripgrep" | "git-mcp-server"
+
 #SessionStartHookManifest: {
 	input: hooks.#SessionStartCommandInput & _hookInput
 	output: hooks.#SessionStartCommandOutput
@@ -55,7 +57,7 @@ _hookInput: hookInput
 	input: hooks.#UserPromptSubmitCommandInput & _hookInput
 	output: hooks.#UserPromptSubmitCommandOutput
 	capture: {
-		persist: false
+		persist: true
 	}
 }
 
@@ -79,7 +81,15 @@ _hookInput: hookInput
 	input: hooks.#PostToolUseCommandInput & _hookInput
 	output: hooks.#PostToolUseCommandOutput
 	capture: {
-		persist: false
+		if input.tool_name == "mcp-ripgrep" {
+			persist: true
+		}
+		if input.tool_name == "git-mcp-server" {
+			persist: true
+		}
+		if input.tool_name != "mcp-ripgrep" && input.tool_name != "git-mcp-server" {
+			persist: false
+		}
 	}
 }
 
@@ -119,6 +129,6 @@ _hookInput: hookInput
 	input: hooks.#StopCommandInput & _hookInput
 	output: hooks.#StopCommandOutput
 	capture: {
-		persist: false
+		persist: true
 	}
 }

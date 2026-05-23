@@ -13,6 +13,10 @@ need() {
 cleanup_temp_files() {
   [ -n "${output_json:-}" ] && rm -f "$output_json"
   [ -n "${stderr_log:-}" ] && rm -f "$stderr_log"
+  [ -n "${fixture_wrap_json:-}" ] && rm -f "$fixture_wrap_json"
+  [ -n "${fixture_persist_json:-}" ] && rm -f "$fixture_persist_json"
+  [ -n "${doctor_fixture_state:-}" ] && rm -rf "$doctor_fixture_state"
+  return 0
 }
 
 : "${CODEX_HOME:?CODEX_HOME is required}"
@@ -53,6 +57,9 @@ need wc
 trap cleanup_temp_files EXIT HUP INT TERM
 
 mkdir -p "$CUERAIL_TURNS"
+doctor_fixture_state=$(mktemp -d "${TMPDIR:-/tmp}/cuerail-doctor-state.XXXXXX")
+doctor_fixture_turns="$doctor_fixture_state/cuerail/turns"
+expected_persisted_count=0
 
 (
   cd "$CUERAIL_HOME"
@@ -72,8 +79,20 @@ for fixture in "$CUERAIL_HOME"/test/fixtures/hooks/*.json; do
 
   output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-hook-output.XXXXXX.json")
   stderr_log=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-hook-stderr.XXXXXX.log")
+  fixture_wrap_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-hook-wrapped.XXXXXX.json")
+  fixture_persist_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-hook-persist.XXXXXX.json")
 
-  if ! "$CUERAIL_HOME/bin/cuerail-hook" <"$fixture" >"$output_json" 2>"$stderr_log"; then
+  jq -c '{hookInput: .}' "$fixture" >"$fixture_wrap_json"
+
+  (
+    cd "$CUERAIL_HOME"
+    cue export ./cue/runtime "$fixture_wrap_json" -e '#HookManifest.capture.persist' >"$fixture_persist_json"
+  ) || die "fixture persist export failed: $(basename "$fixture")"
+
+  fixture_persist=$(jq -r 'if . == true then "true" else "false" end' "$fixture_persist_json")
+  [ "$fixture_persist" = "false" ] || expected_persisted_count=$((expected_persisted_count + 1))
+
+  if ! CUERAIL_STATE="$doctor_fixture_state/cuerail" CUERAIL_TURNS="$doctor_fixture_turns" "$CUERAIL_HOME/bin/cuerail-hook" <"$fixture" >"$output_json" 2>"$stderr_log"; then
     die "fixture hook run failed: $(basename "$fixture")"
   fi
 
@@ -83,11 +102,27 @@ for fixture in "$CUERAIL_HOME"/test/fixtures/hooks/*.json; do
     die "fixture used fallback: $(basename "$fixture")"
   fi
 
-  rm -f "$output_json" "$stderr_log"
+  rm -f "$output_json" "$stderr_log" "$fixture_wrap_json" "$fixture_persist_json"
 done
 
 output_json=
 stderr_log=
+fixture_wrap_json=
+fixture_persist_json=
+
+persisted_count=0
+for manifest in "$doctor_fixture_turns"/session-example/turn-example/events/*.cue; do
+  [ -f "$manifest" ] || continue
+  (
+    cd "$CUERAIL_HOME"
+    cue vet -c=false ./cue/runtime "$manifest" -d '#HookManifest'
+  ) || die "persisted manifest validation failed: $(basename "$manifest")"
+  persisted_count=$((persisted_count + 1))
+done
+
+[ "$persisted_count" -eq "$expected_persisted_count" ] ||
+  die "unexpected persisted manifest count: got $persisted_count expected $expected_persisted_count"
+
 "$CUERAIL_HOME/bin/cuerail-schema-sync" --check >/dev/null
 
 printf 'cuerail-doctor: ok\n'
