@@ -147,7 +147,7 @@ case "$mode" in
       safe=$(safe_cue_name "$file")
       def=$(schema_def_name "$file")
 
-      cue import jsonschema "$raw_dir/$file" -p cuerail -l "\"#$def\"" -o "$tmp_files.cue"
+      cue import jsonschema "$raw_dir/$file" -p hooks -l "\"#$def\"" -o "$tmp_files.cue"
       sed 's/^"#\([A-Za-z0-9_][A-Za-z0-9_]*\)": {$/#\1: {/' "$tmp_files.cue" >"$tmp_files.cue2"
       mv "$tmp_files.cue2" "$generated_cue_dir/$safe.cue"
       rm -f "$tmp_files.cue"

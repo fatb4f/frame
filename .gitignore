@@ -5,3 +5,4 @@
 .out/
 frames/
 cue/generated/hooks/*.cue
+.sem/

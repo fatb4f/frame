@@ -17,20 +17,42 @@ export CODEX_HOME CODEX_STATE CUERAIL_HOME CUERAIL_STATE CUERAIL_TURNS
 command -v jq >/dev/null 2>&1 || die "missing required command: jq"
 
 input_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook.XXXXXX.json")
+wrapped_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-wrapped.XXXXXX.json")
+output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-output.XXXXXX.json")
 trap 'rm -f "$input_json"' EXIT HUP INT TERM
 
 cat >"$input_json"
 
 event_name=$(jq -r '.hook_event_name // empty' "$input_json") || die "invalid hook JSON"
 
-case "$event_name" in
-  SessionStart|UserPromptSubmit|PostToolUse|Stop)
-    printf '{}\n'
-    ;;
-  "")
-    die "missing hook_event_name"
-    ;;
-  *)
-    die "unsupported placeholder hook event: $event_name"
-    ;;
-esac
+jq -c '{_hookInput: .}' "$input_json" >"$wrapped_json" || die "could not wrap hook JSON"
+
+if (
+  cd "$CUERAIL_HOME" &&
+  cue export ./cue "$wrapped_json" -e '#HookManifest' >"$output_json"
+); then
+  jq -c '.output' "$output_json"
+  exit 0
+fi
+
+fallback_output() {
+  case "$1" in
+    SessionStart|UserPromptSubmit|PostToolUse|PreCompact|PostCompact|SubagentStart)
+      printf '{}\n'
+      ;;
+    PreToolUse|Stop|SubagentStop)
+      printf '{"decision":"block","reason":"cuerail fallback"}\n'
+      ;;
+    PermissionRequest)
+      printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny"}}}'
+      ;;
+    "")
+      die "missing hook_event_name"
+      ;;
+    *)
+      die "unsupported placeholder hook event: $event_name"
+      ;;
+  esac
+}
+
+fallback_output "$event_name"

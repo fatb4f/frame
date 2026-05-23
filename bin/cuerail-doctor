@@ -53,6 +53,10 @@ mkdir -p "$CUERAIL_TURNS"
   cue export ./cue -e '#ExpectedHookSchemaFiles' >/dev/null
   cue export ./cue -e '#SchemaSync' >/dev/null
   cue export ./cue -e '#ExampleSchemaLock' >/dev/null
+  cue export ./cue -e '#ExampleSessionStartHookOutput' >/dev/null
+  cue export ./cue -e '#ExampleUserPromptSubmitHookOutput' >/dev/null
+  cue export ./cue -e '#ExamplePostToolUseHookOutput' >/dev/null
+  cue export ./cue -e '#ExampleStopHookOutput' >/dev/null
 )
 
 "$CUERAIL_HOME/bin/cuerail-schema-sync" --check >/dev/null

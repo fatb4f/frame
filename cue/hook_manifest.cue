@@ -1,0 +1,122 @@
+package cuerail
+
+import hooks "github.com/fatb4f/cuerail/cue/generated/hooks"
+
+_hookInput: {
+	hook_event_name!: #CodexHookEvent
+}
+
+#HookInputByEvent: {
+	"SessionStart":      hooks.#SessionStartCommandInput
+	"UserPromptSubmit":  hooks.#UserPromptSubmitCommandInput
+	"PreToolUse":        hooks.#PreToolUseCommandInput
+	"PermissionRequest": hooks.#PermissionRequestCommandInput
+	"PostToolUse":       hooks.#PostToolUseCommandInput
+	"PreCompact":        hooks.#PreCompactCommandInput
+	"PostCompact":       hooks.#PostCompactCommandInput
+	"SubagentStart":     hooks.#SubagentStartCommandInput
+	"SubagentStop":      hooks.#SubagentStopCommandInput
+	"Stop":              hooks.#StopCommandInput
+}
+
+#CodexHookInput: hooks.#SessionStartCommandInput |
+	hooks.#UserPromptSubmitCommandInput |
+	hooks.#PreToolUseCommandInput |
+	hooks.#PermissionRequestCommandInput |
+	hooks.#PostToolUseCommandInput |
+	hooks.#PreCompactCommandInput |
+	hooks.#PostCompactCommandInput |
+	hooks.#SubagentStartCommandInput |
+	hooks.#SubagentStopCommandInput |
+	hooks.#StopCommandInput
+
+#HookManifest: #SessionStartHookManifest |
+	#UserPromptSubmitHookManifest |
+	#PreToolUseHookManifest |
+	#PermissionRequestHookManifest |
+	#PostToolUseHookManifest |
+	#PreCompactHookManifest |
+	#PostCompactHookManifest |
+	#SubagentStartHookManifest |
+	#SubagentStopHookManifest |
+	#StopHookManifest
+
+#SessionStartHookManifest: {
+	input: hooks.#SessionStartCommandInput & _hookInput
+	output: hooks.#SessionStartCommandOutput
+	capture: {
+		persist: false
+	}
+}
+
+#UserPromptSubmitHookManifest: {
+	input: hooks.#UserPromptSubmitCommandInput & _hookInput
+	output: hooks.#UserPromptSubmitCommandOutput
+	capture: {
+		persist: false
+	}
+}
+
+#PreToolUseHookManifest: {
+	input: hooks.#PreToolUseCommandInput & _hookInput
+	output: hooks.#PreToolUseCommandOutput
+	capture: {
+		persist: false
+	}
+}
+
+#PermissionRequestHookManifest: {
+	input: hooks.#PermissionRequestCommandInput & _hookInput
+	output: hooks.#PermissionRequestCommandOutput
+	capture: {
+		persist: false
+	}
+}
+
+#PostToolUseHookManifest: {
+	input: hooks.#PostToolUseCommandInput & _hookInput
+	output: hooks.#PostToolUseCommandOutput
+	capture: {
+		persist: false
+	}
+}
+
+#PreCompactHookManifest: {
+	input: hooks.#PreCompactCommandInput & _hookInput
+	output: hooks.#PreCompactCommandOutput
+	capture: {
+		persist: false
+	}
+}
+
+#PostCompactHookManifest: {
+	input: hooks.#PostCompactCommandInput & _hookInput
+	output: hooks.#PostCompactCommandOutput
+	capture: {
+		persist: false
+	}
+}
+
+#SubagentStartHookManifest: {
+	input: hooks.#SubagentStartCommandInput & _hookInput
+	output: hooks.#SubagentStartCommandOutput
+	capture: {
+		persist: false
+	}
+}
+
+#SubagentStopHookManifest: {
+	input: hooks.#SubagentStopCommandInput & _hookInput
+	output: hooks.#SubagentStopCommandOutput
+	capture: {
+		persist: false
+	}
+}
+
+#StopHookManifest: {
+	input: hooks.#StopCommandInput & _hookInput
+	output: hooks.#StopCommandOutput
+	capture: {
+		persist: false
+	}
+}
