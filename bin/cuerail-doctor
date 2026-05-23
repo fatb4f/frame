@@ -1,0 +1,44 @@
+#!/usr/bin/env sh
+set -eu
+
+die() {
+  printf 'cuerail-doctor: %s\n' "$1" >&2
+  exit 1
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+: "${CODEX_HOME:?CODEX_HOME is required}"
+: "${CODEX_STATE:?CODEX_STATE is required}"
+: "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"
+
+CUERAIL_STATE="${CUERAIL_STATE:-$CODEX_STATE/cuerail}"
+CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_STATE/turns}"
+
+case "$CUERAIL_HOME" in
+  "$CODEX_HOME"/tools/cuerail) ;;
+  *) die "CUERAIL_HOME must be CODEX_HOME/tools/cuerail" ;;
+esac
+
+[ -d "$CUERAIL_HOME" ] || die "missing CUERAIL_HOME: $CUERAIL_HOME"
+[ ! -L "$CUERAIL_HOME" ] || die "CUERAIL_HOME must not be a symlink"
+[ -x "$CUERAIL_HOME/bin/cuerail-hook" ] || die "missing executable bin/cuerail-hook"
+[ -x "$CUERAIL_HOME/bin/cuerail-doctor" ] || die "missing executable bin/cuerail-doctor"
+[ -d "$CUERAIL_HOME/workflows/frame/cue" ] || die "missing CUE package"
+
+need cue
+need jq
+need mktemp
+need flock
+
+mkdir -p "$CUERAIL_TURNS"
+
+(
+  cd "$CUERAIL_HOME"
+  cue vet ./workflows/frame/cue
+  cue export ./workflows/frame/cue -e '#ExampleCuerailInstallSurface' >/dev/null
+)
+
+printf 'cuerail-doctor: ok\n'

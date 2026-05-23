@@ -1,0 +1,36 @@
+#!/usr/bin/env sh
+set -eu
+
+die() {
+  printf 'cuerail-hook: %s\n' "$1" >&2
+  exit 1
+}
+
+: "${CODEX_HOME:?CODEX_HOME is required}"
+: "${CODEX_STATE:?CODEX_STATE is required}"
+: "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"
+
+CUERAIL_STATE="${CUERAIL_STATE:-$CODEX_STATE/cuerail}"
+CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_STATE/turns}"
+export CODEX_HOME CODEX_STATE CUERAIL_HOME CUERAIL_STATE CUERAIL_TURNS
+
+command -v jq >/dev/null 2>&1 || die "missing required command: jq"
+
+input_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook.XXXXXX.json")
+trap 'rm -f "$input_json"' EXIT HUP INT TERM
+
+cat >"$input_json"
+
+event_name=$(jq -r '.hook_event_name // empty' "$input_json") || die "invalid hook JSON"
+
+case "$event_name" in
+  SessionStart|UserPromptSubmit|PostToolUse|Stop)
+    printf '{}\n'
+    ;;
+  "")
+    die "missing hook_event_name"
+    ;;
+  *)
+    die "unsupported placeholder hook event: $event_name"
+    ;;
+esac

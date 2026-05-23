@@ -27,7 +27,7 @@ esac
 need git
 need mkdir
 need chmod
-need ln
+need mv
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 source_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
@@ -54,17 +54,30 @@ elif [ "$(git -C "$CUERAIL_HOME" rev-parse --show-toplevel)" = "$CODEX_HOME" ]; 
   die "CODEX_HOME must not be the cuerail git root"
 fi
 
-if [ -x "$CUERAIL_HOME/bin/cuerail-hook" ]; then
-  ln -sfn "$CUERAIL_HOME/bin/cuerail-hook" "$CODEX_HOME/bin/cuerail-hook"
-else
-  printf 'cuerail-install: pending runtime command: %s\n' "$CUERAIL_HOME/bin/cuerail-hook" >&2
-fi
+write_wrapper() {
+  name=$1
+  target=$2
+  tmp="$CODEX_HOME/bin/.$name.tmp.$$"
 
-if [ -x "$CUERAIL_HOME/bin/cuerail-doctor" ]; then
-  ln -sfn "$CUERAIL_HOME/bin/cuerail-doctor" "$CODEX_HOME/bin/cuerail-doctor"
-else
-  printf 'cuerail-install: pending runtime command: %s\n' "$CUERAIL_HOME/bin/cuerail-doctor" >&2
-fi
+  if [ ! -x "$target" ]; then
+    printf 'cuerail-install: pending runtime command: %s\n' "$target" >&2
+    return 0
+  fi
+
+  {
+    printf '%s\n' '#!/usr/bin/env sh'
+    printf '%s\n' 'set -eu'
+    printf '%s\n' ': "${CODEX_HOME:?CODEX_HOME is required}"'
+    printf '%s\n' ': "${CODEX_STATE:?CODEX_STATE is required}"'
+    printf '%s\n' ': "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"'
+    printf 'exec "$CUERAIL_HOME/bin/%s" "$@"\n' "$name"
+  } >"$tmp"
+  chmod 755 "$tmp"
+  mv "$tmp" "$CODEX_HOME/bin/$name"
+}
+
+write_wrapper cuerail-hook "$CUERAIL_HOME/bin/cuerail-hook"
+write_wrapper cuerail-doctor "$CUERAIL_HOME/bin/cuerail-doctor"
 
 chmod 700 "$CUERAIL_STATE" "$CUERAIL_TURNS" 2>/dev/null || true
 

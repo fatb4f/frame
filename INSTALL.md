@@ -32,6 +32,9 @@ $CODEX_HOME/bin/cuerail-doctor
 $CODEX_HOME/hooks.json
 ```
 
+The files in `$CODEX_HOME/bin` are generated wrapper files, not symlinks. They
+provide a stable Codex-facing ABI and exec the runtime worktree commands.
+
 Mutable state:
 
 ```txt

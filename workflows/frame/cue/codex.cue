@@ -73,7 +73,7 @@ package repo
 		"git",
 		"mkdir",
 		"chmod",
-		"ln",
+		"mv",
 	]
 
 	mutableState: [
