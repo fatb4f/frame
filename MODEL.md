@@ -51,6 +51,7 @@ hookInput: _
 #HookManifest: {
   input: #CodexHookInput & hookInput
   output: #CodexHookOutput & #OutputForInput
+  agentFeed: #AgentFeed
   capture: #CaptureDecision & {
     event: input.hook_event_name
   }
@@ -59,6 +60,24 @@ hookInput: _
 
 `#OutputForInput` is event-specific. A shared output type must not admit fields
 that any event rejects.
+
+## Agent feed contract
+
+Persisted manifests must record whether the hook attempted to feed context back
+into the live agent loop:
+
+```cue
+#AgentFeed: {
+  enabled: bool
+  channel?: "stdout.additionalContext" | "stdout.systemMessage" | "continue.reason"
+  status:  "not_attempted" | "emitted" | "unsupported_event" | "invalid_output"
+  bytes?:  int & >=0
+}
+```
+
+Full hook evidence stays in the turn artifacts. If a hook emits live context,
+it must be a small bounded summary and the manifest must record the channel,
+status, and byte count.
 
 ## Output taxonomy
 

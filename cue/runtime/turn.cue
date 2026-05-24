@@ -15,6 +15,7 @@ package cuerail
 			reason?:     string
 		}
 		output!:  _
+		agentFeed!: #AgentFeed
 		capture!: #CaptureDecision
 	}]
 }

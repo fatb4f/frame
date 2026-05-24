@@ -28,6 +28,40 @@ _awarenessExecutionReason: awarenessExecutionReason
 	}
 }
 
+#AgentFeedChannel: "stdout.additionalContext" | "stdout.systemMessage" | "continue.reason"
+
+#AgentFeedStatus: "not_attempted" | "emitted" | "unsupported_event" | "invalid_output"
+
+#AgentFeed: {
+	enabled!: bool
+	channel?: #AgentFeedChannel
+	status!:  #AgentFeedStatus
+	bytes?:   int & >=0
+}
+
+#NoAgentFeed: #AgentFeed & {
+	enabled: false
+	status:  "not_attempted"
+}
+
+#PreToolUseAgentContext: string | *""
+
+#PreToolUseAgentFeed: #AgentFeed & {
+	enabled: *false | bool
+	status:  *"not_attempted" | #AgentFeedStatus
+}
+
+if _hookInput.hook_event_name == "PreToolUse" && len(_awarenessResults) > 0 {
+	#PreToolUseAgentContext: "Cuerail observed repo evidence: PreToolUse awareness ran \(_awarenessResults[0].id) via \(_awarenessResults[0].tool). Full evidence persisted under .cuerail/runs/\(_hookInput.session_id)/\(_hookInput.turn_id)/events."
+
+	#PreToolUseAgentFeed: #AgentFeed & {
+		enabled: true
+		channel: "stdout.additionalContext"
+		status:  "emitted"
+		bytes:   len(#PreToolUseAgentContext) & <=1000
+	}
+}
+
 #HookInputByEvent: {
 	"SessionStart":      hooks.#SessionStartCommandInput
 	"UserPromptSubmit":  hooks.#UserPromptSubmitCommandInput
@@ -72,6 +106,7 @@ _awarenessExecutionReason: awarenessExecutionReason
 		#AwarenessExecution
 	}
 	output: hooks.#SessionStartCommandOutput
+	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -86,6 +121,7 @@ _awarenessExecutionReason: awarenessExecutionReason
 		#AwarenessExecution
 	}
 	output: hooks.#UserPromptSubmitCommandOutput
+	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -99,7 +135,15 @@ _awarenessExecutionReason: awarenessExecutionReason
 		results: _awarenessResults
 		#AwarenessExecution
 	}
-	output: hooks.#PreToolUseCommandOutput
+	output: hooks.#PreToolUseCommandOutput & {
+		if #PreToolUseAgentFeed.status == "emitted" {
+			hookSpecificOutput: {
+				hookEventName:      "PreToolUse"
+				additionalContext: #PreToolUseAgentContext
+			}
+		}
+	}
+	agentFeed: #PreToolUseAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -114,6 +158,7 @@ _awarenessExecutionReason: awarenessExecutionReason
 		#AwarenessExecution
 	}
 	output: hooks.#PermissionRequestCommandOutput
+	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -128,6 +173,7 @@ _awarenessExecutionReason: awarenessExecutionReason
 		#AwarenessExecution
 	}
 	output: hooks.#PostToolUseCommandOutput
+	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -142,6 +188,7 @@ _awarenessExecutionReason: awarenessExecutionReason
 		#AwarenessExecution
 	}
 	output: hooks.#PreCompactCommandOutput
+	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -156,6 +203,7 @@ _awarenessExecutionReason: awarenessExecutionReason
 		#AwarenessExecution
 	}
 	output: hooks.#PostCompactCommandOutput
+	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -170,6 +218,7 @@ _awarenessExecutionReason: awarenessExecutionReason
 		#AwarenessExecution
 	}
 	output: hooks.#SubagentStartCommandOutput
+	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -184,6 +233,7 @@ _awarenessExecutionReason: awarenessExecutionReason
 		#AwarenessExecution
 	}
 	output: hooks.#SubagentStopCommandOutput
+	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -198,6 +248,7 @@ _awarenessExecutionReason: awarenessExecutionReason
 		#AwarenessExecution
 	}
 	output: hooks.#StopCommandOutput
+	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}

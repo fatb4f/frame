@@ -138,6 +138,16 @@ do not persist initially:
 payload budgets and redaction fields from the first implementation, even if the
 initial values are conservative defaults.
 
+## Agent feed
+
+Hook persistence and live agent context are separate. Every persisted hook
+manifest includes `agentFeed` so a run can distinguish durable evidence from
+stdout that Codex actually accepts as context.
+
+The runtime may emit a small `hookSpecificOutput.additionalContext` summary when
+that evidence is useful for the next agent action. Full MCP/git results remain
+persisted under the turn artifacts instead of being dumped into model context.
+
 ## Turn artifact
 
 ```txt
