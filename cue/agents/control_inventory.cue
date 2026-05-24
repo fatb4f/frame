@@ -555,7 +555,7 @@ package agents
 
 	invariants: [
 		"CUE owns runtime policy, schema, projection, and validation shape.",
-		"Active Cuerail agent procedure lives in $CODEX_HOME/skills/cuerail/SKILL.md.",
+		"Active agent MCP procedure lives in dedicated git and rg skills.",
 		"cue/agents is a migration artifact, not active agent authority.",
 		"Shell owns mechanics only.",
 		"Shell controllers must not decide policy or semantic projection.",

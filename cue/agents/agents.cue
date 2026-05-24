@@ -5,8 +5,7 @@ package agents
 
 	purpose: """
 		Migration artifact for the former repo-local AGENTS.md contract.
-		Active agent-facing Cuerail policy has moved to
-		$CODEX_HOME/skills/cuerail/SKILL.md and Codex hook/config wiring.
+		Agent-facing MCP policy now lives in dedicated git and rg skills.
 		This package remains only to validate and unwind historical projections
 		without changing runtime, hook, adapter, or MCP behavior.
 		"""

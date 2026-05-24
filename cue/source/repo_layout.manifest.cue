@@ -61,12 +61,16 @@ repo_layout: {
 		}
 
 		skill: {
-			plain: "The agent-facing Cuerail skill and its source."
+			plain: "The dedicated agent-facing MCP skills and their source."
 
 			runtime: [
 				{
-					from: "codex/skills/cuerail"
-					to:   "skill/runtime/codex/skills/cuerail"
+					from: "codex/skills/git"
+					to:   "skill/runtime/codex/skills/git"
+				},
+				{
+					from: "codex/skills/rg"
+					to:   "skill/runtime/codex/skills/rg"
 				},
 			]
 
