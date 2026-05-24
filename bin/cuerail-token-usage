@@ -1,0 +1,183 @@
+#!/usr/bin/env sh
+set -eu
+LC_ALL=C
+export LC_ALL
+
+die() {
+  printf 'cuerail-token-usage: %s\n' "$1" >&2
+  exit 1
+}
+
+usage() {
+  cat >&2 <<'EOF'
+usage: cuerail-token-usage [--from-file PATH] [--commit COMMIT] [--output PATH]
+EOF
+  exit 2
+}
+
+cleanup() {
+  [ -n "${input_file_tmp:-}" ] && rm -f "$input_file_tmp"
+  [ -n "${notes_file:-}" ] && rm -f "$notes_file"
+  [ -n "${json_file:-}" ] && rm -f "$json_file"
+  return 0
+}
+
+append_note() {
+  printf '%s\n' "$1" >>"$notes_file"
+}
+
+extract_number() {
+  pattern=$1
+  printf '%s\n' "$token_line" | sed -n "$pattern" | sed 's/,//g'
+}
+
+from_file=
+commit=
+output=
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --from-file)
+      [ "$#" -ge 2 ] || usage
+      from_file=$2
+      shift 2
+      ;;
+    --commit)
+      [ "$#" -ge 2 ] || usage
+      commit=$2
+      shift 2
+      ;;
+    --output)
+      [ "$#" -ge 2 ] || usage
+      output=$2
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      ;;
+    *)
+      usage
+      ;;
+  esac
+done
+
+command -v jq >/dev/null 2>&1 || die "missing required command: jq"
+
+trap cleanup EXIT HUP INT TERM
+
+notes_file=$(mktemp "${TMPDIR:-/tmp}/cuerail-token-usage-notes.XXXXXX")
+: >"$notes_file"
+
+if [ -n "$from_file" ]; then
+  [ -f "$from_file" ] || die "missing input file: $from_file"
+  input_path=$from_file
+  source_kind=file
+else
+  input_file_tmp=$(mktemp "${TMPDIR:-/tmp}/cuerail-token-usage-input.XXXXXX")
+  cat >"$input_file_tmp"
+  input_path=$input_file_tmp
+  source_kind=chat-paste
+fi
+
+extracted_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+token_line=$(awk '/Token usage:/ { print; exit }' "$input_path")
+
+total=
+input=
+cached=
+output_tokens=
+reasoning=
+status=
+degraded=true
+
+if [ -z "$token_line" ]; then
+  source_kind=unknown
+  status=unavailable
+  append_note "no supported token usage artifact found"
+else
+  total=$(extract_number 's/.*total=\([0-9][0-9,]*\).*/\1/p')
+  input=$(extract_number 's/.*input=\([0-9][0-9,]*\).*/\1/p')
+  cached=$(extract_number 's/.*(+[[:space:]]*\([0-9][0-9,]*\)[[:space:]]*cached).*/\1/p')
+  output_tokens=$(extract_number 's/.*output=\([0-9][0-9,]*\).*/\1/p')
+  reasoning=$(extract_number 's/.*(reasoning[[:space:]]*\([0-9][0-9,]*\)).*/\1/p')
+
+  malformed=false
+  case "$token_line" in *"total="*) [ -n "$total" ] || malformed=true ;; esac
+  case "$token_line" in *"input="*) [ -n "$input" ] || malformed=true ;; esac
+  case "$token_line" in *"cached"*) [ -n "$cached" ] || malformed=true ;; esac
+  case "$token_line" in *"output="*) [ -n "$output_tokens" ] || malformed=true ;; esac
+  case "$token_line" in *"reasoning"*) [ -n "$reasoning" ] || malformed=true ;; esac
+
+  if [ "$malformed" = true ]; then
+    status=parse_failed
+    append_note "malformed token usage line"
+  elif [ -n "$total$input$cached$output_tokens$reasoning" ]; then
+    missing=0
+    [ -n "$total" ] || { missing=$((missing + 1)); append_note "total token count unavailable"; }
+    [ -n "$input" ] || { missing=$((missing + 1)); append_note "input token count unavailable"; }
+    [ -n "$cached" ] || { missing=$((missing + 1)); append_note "cached token count unavailable"; }
+    [ -n "$output_tokens" ] || { missing=$((missing + 1)); append_note "output token count unavailable"; }
+    [ -n "$reasoning" ] || { missing=$((missing + 1)); append_note "reasoning token count unavailable"; }
+    if [ "$missing" -eq 0 ]; then
+      status=ok
+      degraded=false
+    else
+      status=partial
+    fi
+  else
+    status=parse_failed
+    append_note "token usage line contained no parseable counts"
+  fi
+fi
+
+json_file=$(mktemp "${TMPDIR:-/tmp}/cuerail-token-usage.XXXXXX.json")
+jq -Rn \
+  --arg schemaVersion "cuerail.tokenUsageEvidence.v1" \
+  --arg sourceKind "$source_kind" \
+  --arg sourcePath "$from_file" \
+  --arg commit "$commit" \
+  --arg extractedAt "$extracted_at" \
+  --arg status "$status" \
+  --arg degraded "$degraded" \
+  --arg total "$total" \
+  --arg input "$input" \
+  --arg cached "$cached" \
+  --arg output "$output_tokens" \
+  --arg reasoning "$reasoning" '
+    def addnum($key; $value):
+      if $value == "" then . else . + {($key): ($value | tonumber)} end;
+
+    [inputs] as $notes |
+    {
+      schemaVersion: $schemaVersion,
+      source: ({
+        kind: $sourceKind,
+        extractedAt: $extractedAt
+      }
+      + (if $sourcePath == "" then {} else {path: $sourcePath} end)
+      + (if $commit == "" then {} else {commit: $commit} end)),
+      status: $status,
+      degraded: ($degraded == "true")
+    }
+    + (if ($total + $input + $cached + $output + $reasoning) == "" then {}
+       else {
+         usage: ({}
+           | addnum("total"; $total)
+           | addnum("input"; $input)
+           | addnum("cached"; $cached)
+           | addnum("output"; $output)
+           | addnum("reasoning"; $reasoning))
+       } end)
+    + {notes: $notes}
+  ' <"$notes_file" >"$json_file"
+
+if [ -n "$output" ]; then
+  output_dir=${output%/*}
+  if [ "$output_dir" != "$output" ]; then
+    mkdir -p "$output_dir"
+  fi
+  mv "$json_file" "$output"
+  json_file=
+else
+  cat "$json_file"
+fi

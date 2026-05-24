@@ -1,0 +1,1 @@
+Token usage: total=101,019 input=95,648 (+ 482,304 cached) output=5,371 (reasoning 1,620)

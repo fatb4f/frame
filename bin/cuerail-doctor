@@ -100,6 +100,7 @@ cleanup_temp_files() {
   [ -n "${expected_git_fixtures_json:-}" ] && rm -f "$expected_git_fixtures_json"
   [ -n "${expected_git_fixture_paths:-}" ] && rm -f "$expected_git_fixture_paths"
   [ -n "${actual_git_fixture_paths:-}" ] && rm -f "$actual_git_fixture_paths"
+  [ -n "${token_usage_json:-}" ] && rm -f "$token_usage_json"
   [ -n "${manifest_json:-}" ] && rm -f "$manifest_json"
   [ -n "${review_packet_json:-}" ] && rm -f "$review_packet_json"
   [ -n "${doctor_fixture_state:-}" ] && rm -rf "$doctor_fixture_state"
@@ -188,6 +189,7 @@ CUERAIL_HOME="${CUERAIL_HOME:-$(resolve_source_home)}"
 [ -x "$CUERAIL_HOME/bin/cuerail-doctor" ] || die "missing executable bin/cuerail-doctor"
 [ -x "$CUERAIL_HOME/bin/cuerail-review-packet" ] || die "missing executable bin/cuerail-review-packet"
 [ -x "$CUERAIL_HOME/bin/cuerail-schema-sync" ] || die "missing executable bin/cuerail-schema-sync"
+[ -x "$CUERAIL_HOME/bin/cuerail-token-usage" ] || die "missing executable bin/cuerail-token-usage"
 [ -x "$CUERAIL_HOME/bin/cuerail-adapter-export" ] || die "missing executable bin/cuerail-adapter-export"
 [ -x "$CUERAIL_HOME/bin/cuerail-mcp-ripgrep" ] || die "missing executable bin/cuerail-mcp-ripgrep"
 [ -x "$CUERAIL_HOME/bin/cuerail-mcp-capture" ] || die "missing executable bin/cuerail-mcp-capture"
@@ -237,7 +239,23 @@ expected_persisted_count=0
   cue export ./cue/runtime -e '#ExampleGitRepoUnstagedDiffCapture' >/dev/null
   cue export ./cue/runtime -e '#ExampleGitRepoStagedDiffCapture' >/dev/null
   cue export ./cue/runtime -e '#ExampleGitRepoLogCapture' >/dev/null
+  cue export ./cue/runtime -e '#ExampleTokenUsageEvidence' >/dev/null
 )
+
+for fixture in "$CUERAIL_HOME"/test/fixtures/token-usage/*.txt; do
+  [ -f "$fixture" ] || continue
+
+  token_usage_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-token-usage.XXXXXX.json")
+  "$CUERAIL_HOME/bin/cuerail-token-usage" --from-file "$fixture" >"$token_usage_json"
+  jq -e . "$token_usage_json" >/dev/null
+  (
+    cd "$CUERAIL_HOME"
+    cue vet -c=false ./cue/runtime "$token_usage_json" -d '#TokenUsageEvidence'
+  ) || die "schema_invalid_token_usage_evidence: $(basename "$fixture")"
+
+  rm -f "$token_usage_json"
+  token_usage_json=
+done
 
 review_packet_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-review-packet.XXXXXX.json")
 CUERAIL_REVIEW_PACKET_SKIP_SOURCE_DOCTOR=1 "$CUERAIL_HOME/bin/cuerail-review-packet" >"$review_packet_json"
