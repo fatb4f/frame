@@ -48,129 +48,132 @@ _awarenessResults: awarenessResults
 	#SubagentStopHookManifest |
 	#StopHookManifest
 
-#McpEvidenceTool: "mcp-ripgrep" | "git-mcp-server"
-
 #SessionStartHookManifest: {
-	_hookInputValue: hooks.#SessionStartCommandInput & _hookInput
-	input:           _hookInputValue
+	input: hooks.#SessionStartCommandInput & _hookInput
+	let captureInput = input
 	awareness: {
 		plan:    #SessionStartAwarenessPlan
 		results: _awarenessResults
 	}
 	output: hooks.#SessionStartCommandOutput
-	capture: #CaptureDecisionForEvent.SessionStart
+	capture: #CaptureDecisionForInput & {
+		_input: captureInput
+	}
 }
 
 #UserPromptSubmitHookManifest: {
-	_hookInputValue: hooks.#UserPromptSubmitCommandInput & _hookInput
-	input:           _hookInputValue
+	input: hooks.#UserPromptSubmitCommandInput & _hookInput
+	let captureInput = input
 	awareness: {
 		plan:    #UserPromptSubmitAwarenessPlan
 		results: _awarenessResults
 	}
 	output: hooks.#UserPromptSubmitCommandOutput
-	capture: #CaptureDecisionForEvent.UserPromptSubmit
+	capture: #CaptureDecisionForInput & {
+		_input: captureInput
+	}
 }
 
 #PreToolUseHookManifest: {
-	_hookInputValue: hooks.#PreToolUseCommandInput & _hookInput
-	input:           _hookInputValue
+	input: hooks.#PreToolUseCommandInput & _hookInput
+	let captureInput = input
 	awareness: {
 		plan:    #PreToolUseAwarenessPlan
 		results: _awarenessResults
 	}
 	output: hooks.#PreToolUseCommandOutput
-	capture: #CaptureDecisionForEvent.PreToolUse
+	capture: #CaptureDecisionForInput & {
+		_input: captureInput
+	}
 }
 
 #PermissionRequestHookManifest: {
-	_hookInputValue: hooks.#PermissionRequestCommandInput & _hookInput
-	input:           _hookInputValue
+	input: hooks.#PermissionRequestCommandInput & _hookInput
+	let captureInput = input
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "PermissionRequest"}
 		results: _awarenessResults
 	}
 	output: hooks.#PermissionRequestCommandOutput
-	capture: #CaptureDecisionForEvent.PermissionRequest
+	capture: #CaptureDecisionForInput & {
+		_input: captureInput
+	}
 }
 
 #PostToolUseHookManifest: {
-	_hookInputValue: hooks.#PostToolUseCommandInput & _hookInput
-	input:           _hookInputValue
+	input: hooks.#PostToolUseCommandInput & _hookInput
+	let captureInput = input
 	awareness: {
 		plan:    #PostToolUseAwarenessPlan
 		results: _awarenessResults
 	}
 	output: hooks.#PostToolUseCommandOutput
-	capture: #CaptureDecisionForEvent.PostToolUse & {
-		if input.tool_name == "mcp-ripgrep" {
-			persist:  #CapturePolicy.persist.postToolUse."mcp-ripgrep"
-			toolSlug: "mcp-ripgrep"
-			fileStem: "\(#CapturePolicy.eventSlugs.PostToolUse).\(toolSlug)"
-		}
-		if input.tool_name == "git-mcp-server" {
-			persist:  #CapturePolicy.persist.postToolUse."git-mcp-server"
-			toolSlug: "git-mcp-server"
-			fileStem: "\(#CapturePolicy.eventSlugs.PostToolUse).\(toolSlug)"
-		}
-		if input.tool_name != "mcp-ripgrep" && input.tool_name != "git-mcp-server" {
-			persist: #CapturePolicy.persist.events.PostToolUse
-			fileStem: #CapturePolicy.eventSlugs.PostToolUse
-		}
+	capture: #CaptureDecisionForInput & {
+		_input: captureInput
 	}
 }
 
 #PreCompactHookManifest: {
-	_hookInputValue: hooks.#PreCompactCommandInput & _hookInput
-	input:           _hookInputValue
+	input: hooks.#PreCompactCommandInput & _hookInput
+	let captureInput = input
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "PreCompact"}
 		results: _awarenessResults
 	}
 	output: hooks.#PreCompactCommandOutput
-	capture: #CaptureDecisionForEvent.PreCompact
+	capture: #CaptureDecisionForInput & {
+		_input: captureInput
+	}
 }
 
 #PostCompactHookManifest: {
-	_hookInputValue: hooks.#PostCompactCommandInput & _hookInput
-	input:           _hookInputValue
+	input: hooks.#PostCompactCommandInput & _hookInput
+	let captureInput = input
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "PostCompact"}
 		results: _awarenessResults
 	}
 	output: hooks.#PostCompactCommandOutput
-	capture: #CaptureDecisionForEvent.PostCompact
+	capture: #CaptureDecisionForInput & {
+		_input: captureInput
+	}
 }
 
 #SubagentStartHookManifest: {
-	_hookInputValue: hooks.#SubagentStartCommandInput & _hookInput
-	input:           _hookInputValue
+	input: hooks.#SubagentStartCommandInput & _hookInput
+	let captureInput = input
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "SubagentStart"}
 		results: _awarenessResults
 	}
 	output: hooks.#SubagentStartCommandOutput
-	capture: #CaptureDecisionForEvent.SubagentStart
+	capture: #CaptureDecisionForInput & {
+		_input: captureInput
+	}
 }
 
 #SubagentStopHookManifest: {
-	_hookInputValue: hooks.#SubagentStopCommandInput & _hookInput
-	input:           _hookInputValue
+	input: hooks.#SubagentStopCommandInput & _hookInput
+	let captureInput = input
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "SubagentStop"}
 		results: _awarenessResults
 	}
 	output: hooks.#SubagentStopCommandOutput
-	capture: #CaptureDecisionForEvent.SubagentStop
+	capture: #CaptureDecisionForInput & {
+		_input: captureInput
+	}
 }
 
 #StopHookManifest: {
-	_hookInputValue: hooks.#StopCommandInput & _hookInput
-	input:           _hookInputValue
+	input: hooks.#StopCommandInput & _hookInput
+	let captureInput = input
 	awareness: {
 		plan:    #StopAwarenessPlan
 		results: _awarenessResults
 	}
 	output: hooks.#StopCommandOutput
-	capture: #CaptureDecisionForEvent.Stop
+	capture: #CaptureDecisionForInput & {
+		_input: captureInput
+	}
 }

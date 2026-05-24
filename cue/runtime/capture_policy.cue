@@ -1,7 +1,5 @@
 package cuerail
 
-#CapturedPostToolUseName: "mcp-ripgrep" | "git-mcp-server"
-
 #CapturePolicy: {
 	persist: {
 		events: {
@@ -18,6 +16,7 @@ package cuerail
 		}
 		plannedAwarenessEvents: ["SessionStart", "PreToolUse", "Stop"]
 		postToolUse: {
+			[string]:        bool
 			"mcp-ripgrep":    true
 			"git-mcp-server": true
 		}
@@ -43,53 +42,40 @@ package cuerail
 	toolSlug?:  string
 }
 
-#CaptureDecisionForEvent: {
-	SessionStart: #CaptureDecision & {
-		persist:   #CapturePolicy.persist.events.SessionStart
-		eventSlug: #CapturePolicy.eventSlugs.SessionStart
-		fileStem:  eventSlug
+#CaptureDecisionForInput: #CaptureDecision & {
+	_input!: {
+		hook_event_name!: #CodexHookEvent
+		if hook_event_name == "PostToolUse" {
+			tool_name!: string
+		}
+		...
 	}
-	UserPromptSubmit: #CaptureDecision & {
-		persist:   #CapturePolicy.persist.events.UserPromptSubmit
-		eventSlug: #CapturePolicy.eventSlugs.UserPromptSubmit
-		fileStem:  eventSlug
+
+	_eventName: _input.hook_event_name
+	_eventPolicy: #CapturePolicy.persist.events & {
+		(_eventName): *false | bool
 	}
-	PreToolUse: #CaptureDecision & {
-		persist:   #CapturePolicy.persist.events.PreToolUse
-		eventSlug: #CapturePolicy.eventSlugs.PreToolUse
-		fileStem:  eventSlug
+
+	eventSlug: #CapturePolicy.eventSlugs[_eventName]
+
+	if _eventName != "PostToolUse" {
+		persist:  _eventPolicy[_eventName]
+		fileStem: eventSlug
 	}
-	PermissionRequest: #CaptureDecision & {
-		persist:   #CapturePolicy.persist.events.PermissionRequest
-		eventSlug: #CapturePolicy.eventSlugs.PermissionRequest
-		fileStem:  eventSlug
-	}
-	PostToolUse: #CaptureDecision & {
-		eventSlug: #CapturePolicy.eventSlugs.PostToolUse
-	}
-	PreCompact: #CaptureDecision & {
-		persist:   #CapturePolicy.persist.events.PreCompact
-		eventSlug: #CapturePolicy.eventSlugs.PreCompact
-		fileStem:  eventSlug
-	}
-	PostCompact: #CaptureDecision & {
-		persist:   #CapturePolicy.persist.events.PostCompact
-		eventSlug: #CapturePolicy.eventSlugs.PostCompact
-		fileStem:  eventSlug
-	}
-	SubagentStart: #CaptureDecision & {
-		persist:   #CapturePolicy.persist.events.SubagentStart
-		eventSlug: #CapturePolicy.eventSlugs.SubagentStart
-		fileStem:  eventSlug
-	}
-	SubagentStop: #CaptureDecision & {
-		persist:   #CapturePolicy.persist.events.SubagentStop
-		eventSlug: #CapturePolicy.eventSlugs.SubagentStop
-		fileStem:  eventSlug
-	}
-	Stop: #CaptureDecision & {
-		persist:   #CapturePolicy.persist.events.Stop
-		eventSlug: #CapturePolicy.eventSlugs.Stop
-		fileStem:  eventSlug
+
+	if _eventName == "PostToolUse" {
+		_toolName: _input.tool_name
+		_toolPolicy: #CapturePolicy.persist.postToolUse & {
+			(_toolName): *false | bool
+		}
+		persist: _toolPolicy[_toolName]
+
+		if _toolPolicy[_toolName] {
+			toolSlug: _toolName
+			fileStem: "\(eventSlug).\(toolSlug)"
+		}
+		if _toolPolicy[_toolName] == false {
+			fileStem: eventSlug
+		}
 	}
 }
