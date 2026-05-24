@@ -3,11 +3,11 @@ package cuerail
 #CapturePolicy: {
 	persist: {
 		events: {
-			SessionStart:      false
+			SessionStart:      true
 			UserPromptSubmit:  true
-			PreToolUse:        false
+			PreToolUse:        true
 			PermissionRequest: false
-			PostToolUse:       false
+			PostToolUse:       true
 			PreCompact:        false
 			PostCompact:       false
 			SubagentStart:     false
@@ -15,11 +15,6 @@ package cuerail
 			Stop:              true
 		}
 		plannedAwarenessEvents: ["SessionStart", "PreToolUse", "Stop"]
-		postToolUse: {
-			[string]:        bool
-			"mcp-ripgrep":    true
-			"git-mcp-server": true
-		}
 	}
 	eventSlugs: {
 		SessionStart:      "session-start"
@@ -36,7 +31,7 @@ package cuerail
 }
 
 #CaptureDecision: {
-	persist!: bool
+	persist!:   bool
 	eventSlug?: string
 	fileStem?:  string
 	toolSlug?:  string
@@ -65,17 +60,8 @@ package cuerail
 
 	if _eventName == "PostToolUse" {
 		_toolName: _input.tool_name
-		_toolPolicy: #CapturePolicy.persist.postToolUse & {
-			(_toolName): *false | bool
-		}
-		persist: _toolPolicy[_toolName]
-
-		if _toolPolicy[_toolName] {
-			toolSlug: _toolName
-			fileStem: "\(eventSlug).\(toolSlug)"
-		}
-		if _toolPolicy[_toolName] == false {
-			fileStem: eventSlug
-		}
+		persist:   true
+		toolSlug:  _toolName
+		fileStem:  "\(eventSlug).\(toolSlug)"
 	}
 }

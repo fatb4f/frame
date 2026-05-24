@@ -36,7 +36,7 @@ Codex hook event JSON
 -> CUE generates #HookManifest
 -> CUE exports event-valid Codex hook output
 -> CapturePolicy decides whether to persist
--> selected hook manifests accumulate under $CODEX_STATE/cuerail/turns
+-> selected hook manifests accumulate under $CUERAIL_HOME/.cuerail/runs
 ```
 
 ## Installed layout
@@ -87,7 +87,7 @@ $CODEX_HOME/tools/cuerail/
 : "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"
 
 CUERAIL_STATE="${CUERAIL_STATE:-$CODEX_STATE/cuerail}"
-CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_STATE/turns}"
+CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_HOME/.cuerail/runs}"
 ```
 
 `cuerail` must not silently choose `~/.codex` or any other fallback root.
@@ -141,7 +141,7 @@ initial values are conservative defaults.
 ## Turn artifact
 
 ```txt
-$CODEX_STATE/cuerail/turns/<session_id>/<turn_id>/
+$CUERAIL_HOME/.cuerail/runs/<session_id>/<turn_id>/
   events/
     000001-user-prompt-submit.cue
     000002-post-tool-use.mcp-ripgrep.cue

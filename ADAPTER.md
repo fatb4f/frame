@@ -43,7 +43,7 @@ Using `jq` only to wrap the complete input payload under `hookInput` is allowed.
 : "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"
 
 CUERAIL_STATE="${CUERAIL_STATE:-$CODEX_STATE/cuerail}"
-CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_STATE/turns}"
+CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_HOME/.cuerail/runs}"
 ```
 
 No fallback roots are allowed in the hook path.
@@ -148,7 +148,7 @@ otherwise fail clearly.
 ## Atomic persistence protocol
 
 ```txt
-turn root = $CODEX_STATE/cuerail/turns/<session_id>/<turn_id>
+turn root = $CUERAIL_HOME/.cuerail/runs/<session_id>/<turn_id>
 events root = $turn_root/events
 lock file = $turn_root/.lock
 sequence = next integer allocated while holding lock

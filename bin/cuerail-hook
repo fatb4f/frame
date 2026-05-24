@@ -112,7 +112,7 @@ execute_awareness_plan() {
 : "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"
 
 CUERAIL_STATE="${CUERAIL_STATE:-$CODEX_STATE/cuerail}"
-CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_STATE/turns}"
+CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_HOME/.cuerail/runs}"
 export CODEX_HOME CODEX_STATE CUERAIL_HOME CUERAIL_STATE CUERAIL_TURNS
 
 command -v jq >/dev/null 2>&1 || die "missing required command: jq"

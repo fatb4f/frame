@@ -39,7 +39,7 @@ Mutable state:
 
 ```txt
 $CODEX_STATE/cuerail/
-$CODEX_STATE/cuerail/turns/
+$CUERAIL_HOME/.cuerail/runs/
 ```
 
 Never track:
@@ -61,7 +61,7 @@ $CODEX_STATE/cuerail/
 ```sh
 CUERAIL_HOME="${CUERAIL_HOME:-$CODEX_HOME/tools/cuerail}"
 CUERAIL_STATE="${CUERAIL_STATE:-$CODEX_STATE/cuerail}"
-CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_STATE/turns}"
+CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_HOME/.cuerail/runs}"
 ```
 
 No fallback to `~/.codex` or any other root is allowed.
@@ -97,7 +97,7 @@ runtime branch.
 
 ```txt
 create $CODEX_HOME/tools
-create $CODEX_STATE/cuerail/turns
+create $CUERAIL_HOME/.cuerail/runs
 materialize $CODEX_HOME/tools/cuerail as a Git worktree when missing
 use CUERAIL_WORKTREE_BRANCH or cuerail-runtime for the worktree branch
 remove legacy Cuerail wrappers from $CODEX_HOME/bin

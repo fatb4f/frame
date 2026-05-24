@@ -128,7 +128,7 @@ unrelated Codex MCP tool usage.
 A turn is a directory of captured hook manifests:
 
 ```txt
-$CODEX_STATE/cuerail/turns/<session_id>/<turn_id>/
+$CUERAIL_HOME/.cuerail/runs/<session_id>/<turn_id>/
   events/
     000001-user-prompt-submit.cue
     000002-post-tool-use.mcp-ripgrep.cue

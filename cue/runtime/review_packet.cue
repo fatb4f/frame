@@ -1,9 +1,9 @@
 package cuerail
 
-#ReviewCheckStatus: "ok" | "failed" | "skipped"
+#ReviewCheckStatus:      "ok" | "failed" | "skipped"
 #ReviewTokenUsageStatus: "available" | "unavailable"
 #ReviewTokenUsageSource: "explicit" | "auto"
-#ReviewEvidenceState: "green" | "yellow" | "red"
+#ReviewEvidenceState:    "green" | "yellow" | "red"
 
 #ReviewEvidenceSurface: {
 	state: #ReviewEvidenceState
@@ -38,10 +38,11 @@ package cuerail
 	}
 
 	checks: {
-		sourceDoctor:  #ReviewCheckStatus
-		cueVet:        #ReviewCheckStatus
-		schemaSync:    #ReviewCheckStatus
-		runtimeDoctor: #ReviewCheckStatus
+		sourceDoctor:     #ReviewCheckStatus
+		cueVet:           #ReviewCheckStatus
+		schemaSync:       #ReviewCheckStatus
+		configSchemaSync: #ReviewCheckStatus
+		runtimeDoctor:    #ReviewCheckStatus
 	}
 
 	tokenUsage: {
