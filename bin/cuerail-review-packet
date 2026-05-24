@@ -13,7 +13,7 @@ need() {
 }
 
 usage() {
-  printf 'usage: cuerail-review-packet [--runtime] [commit]\n' >&2
+  printf 'usage: cuerail-review-packet [--runtime] [--token-usage PATH] [commit]\n' >&2
   exit 2
 }
 
@@ -38,6 +38,7 @@ status_check() {
 }
 
 runtime_requested=false
+token_usage_path=
 commit=HEAD
 
 while [ "$#" -gt 0 ]; do
@@ -45,6 +46,11 @@ while [ "$#" -gt 0 ]; do
     --runtime)
       runtime_requested=true
       shift
+      ;;
+    --token-usage)
+      [ "$#" -ge 2 ] || usage
+      token_usage_path=$2
+      shift 2
       ;;
     -h|--help)
       usage
@@ -131,6 +137,13 @@ else
   mv "$notes_json_tmp" "$notes_json"
 fi
 
+token_usage_available=false
+token_usage_status=unavailable
+if [ -n "$token_usage_path" ] && [ -f "$token_usage_path" ]; then
+  token_usage_available=true
+  token_usage_status=available
+fi
+
 jq -n \
   --arg commit "$commit_sha" \
   --arg parent "$parent_sha" \
@@ -141,6 +154,9 @@ jq -n \
   --arg cueVet "$cue_vet_status" \
   --arg schemaSync "$schema_sync_status" \
   --arg runtimeDoctor "$runtime_doctor_status" \
+  --arg tokenUsagePath "$token_usage_path" \
+  --arg tokenUsageAvailable "$token_usage_available" \
+  --arg tokenUsageStatus "$token_usage_status" \
   --slurpfile notes "$notes_json" \
   '{
     commit: $commit,
@@ -161,6 +177,11 @@ jq -n \
       cueVet: $cueVet,
       schemaSync: $schemaSync,
       runtimeDoctor: $runtimeDoctor
+    },
+    tokenUsage: {
+      available: ($tokenUsageAvailable == "true"),
+      status: $tokenUsageStatus,
+      path: (if $tokenUsagePath == "" then null else $tokenUsagePath end)
     },
     notes: $notes[0]
   }'

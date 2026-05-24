@@ -1,6 +1,7 @@
 package cuerail
 
 #ReviewCheckStatus: "ok" | "failed" | "skipped"
+#ReviewTokenUsageStatus: "available" | "unavailable"
 
 #ReviewPacket: {
 	commit:  =~"^[0-9a-f]{40}$"
@@ -28,6 +29,12 @@ package cuerail
 		cueVet:        #ReviewCheckStatus
 		schemaSync:    #ReviewCheckStatus
 		runtimeDoctor: #ReviewCheckStatus
+	}
+
+	tokenUsage: {
+		available: bool
+		status:    #ReviewTokenUsageStatus
+		path:      null | string
 	}
 
 	notes: [...string]

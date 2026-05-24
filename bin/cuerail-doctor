@@ -264,7 +264,36 @@ jq -e . "$review_packet_json" >/dev/null
   cd "$CUERAIL_HOME"
   cue vet -c=false ./cue/runtime "$review_packet_json" -d '#ReviewPacket'
 ) || die "invalid review packet output"
+jq -e '
+  .tokenUsage == {
+    "available": false,
+    "status": "unavailable",
+    "path": null
+  }
+' "$review_packet_json" >/dev/null ||
+  die "invalid default review packet token usage reference"
 rm -f "$review_packet_json"
+review_packet_json=
+
+token_usage_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-token-usage.XXXXXX.json")
+"$CUERAIL_HOME/bin/cuerail-token-usage" --from-file "$CUERAIL_HOME/test/fixtures/token-usage/full.txt" >"$token_usage_json"
+review_packet_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-review-packet.XXXXXX.json")
+CUERAIL_REVIEW_PACKET_SKIP_SOURCE_DOCTOR=1 "$CUERAIL_HOME/bin/cuerail-review-packet" --token-usage "$token_usage_json" >"$review_packet_json"
+jq -e . "$review_packet_json" >/dev/null
+(
+  cd "$CUERAIL_HOME"
+  cue vet -c=false ./cue/runtime "$review_packet_json" -d '#ReviewPacket'
+) || die "invalid review packet output with token usage reference"
+jq -e --arg path "$token_usage_json" '
+  .tokenUsage == {
+    "available": true,
+    "status": "available",
+    "path": $path
+  }
+' "$review_packet_json" >/dev/null ||
+  die "invalid available review packet token usage reference"
+rm -f "$token_usage_json" "$review_packet_json"
+token_usage_json=
 review_packet_json=
 
 mcp_adapter_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-mcp-ripgrep-adapter.XXXXXX.json")
