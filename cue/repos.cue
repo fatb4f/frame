@@ -19,7 +19,7 @@ repos: {
 	frame: {
 		name: "frame"
 		role: "schema-authority"
-		root: "/home/_404/src/frame"
+		root: "/home/_404/.local/share/codex/tools/cuerail"
 	}
 
 	dotfiles: {
