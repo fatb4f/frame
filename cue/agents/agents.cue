@@ -385,6 +385,11 @@ package agents
 				when:    "after changing CUE schemas or schema-sync behavior"
 			},
 			{
+				run:     "CODEX_HOME=\"${CODEX_HOME:-$HOME/.local/share/codex}\" CODEX_STATE=\"${CODEX_STATE:-$HOME/.local/state/codex}\" PATH=\"$PWD/bin:$PATH\" cuerail-config-schema-sync --check"
+				purpose: "Validate generated config schema sync."
+				when:    "after changing Codex config schema-sync behavior"
+			},
+			{
 				run:     "CODEX_HOME=\"${CODEX_HOME:-$HOME/.local/share/codex}\" CODEX_STATE=\"${CODEX_STATE:-$HOME/.local/state/codex}\" CUERAIL_HOME=\"${CUERAIL_HOME:-$CODEX_HOME/tools/cuerail}\" CUERAIL_BIN=\"${CUERAIL_BIN:-$CUERAIL_HOME/bin}\" CUERAIL_STATE=\"${CUERAIL_STATE:-$CODEX_STATE/cuerail}\" PATH=\"$CUERAIL_BIN:$PATH\" \"$CUERAIL_BIN/cuerail-doctor\""
 				purpose: "Run Cuerail doctor."
 				when:    "after changing hook behavior, schema-sync behavior, or adapter wiring"

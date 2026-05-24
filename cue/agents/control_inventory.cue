@@ -208,6 +208,16 @@ package agents
 			mayDecide: ["download mechanics", "import mechanics", "lock file mechanics"]
 			mustNotDecide: ["expected schema set", "schema lock shape", "runtime schema policy"]
 		},
+		{
+			id:      "cuerail-config-schema-sync"
+			role:    "controller"
+			owner:   "shell"
+			purpose: "Sequences Codex config schema fetch, import, lock writing, and drift checking."
+			paths: ["bin/cuerail-config-schema-sync"]
+			commands: ["cuerail-config-schema-sync --sync", "cuerail-config-schema-sync --check"]
+			mayDecide: ["download mechanics", "import mechanics", "lock file mechanics"]
+			mustNotDecide: ["config schema URL", "schema lock shape", "runtime config policy"]
+		},
 	]
 
 	actuators: [
@@ -229,6 +239,16 @@ package agents
 			paths: ["bin/cuerail-schema-sync"]
 			commands: ["cuerail-schema-sync --sync"]
 			mayWrite: ["raw hook schemas", "cue/generated/hooks", "schema lock"]
+			mustNotWrite: ["runtime behavior", "adapter behavior"]
+		},
+		{
+			id:      "cuerail-config-schema-sync-actuator"
+			role:    "actuator"
+			owner:   "shell"
+			purpose: "Writes raw upstream Codex config schema, imported generated CUE schema, and schema lock during sync."
+			paths: ["bin/cuerail-config-schema-sync"]
+			commands: ["cuerail-config-schema-sync --sync"]
+			mayWrite: ["raw config schema", "cue/generated/config", "config schema lock"]
 			mustNotWrite: ["runtime behavior", "adapter behavior"]
 		},
 		{
@@ -463,6 +483,16 @@ package agents
 			inputs: ["cue/sync", "cue/runtime", "cue/generated/hooks", "schema lock"]
 			outputs: ["validation status"]
 			failureMeaning: "Generated hook schemas are missing, stale, or inconsistent with the lock."
+		},
+		{
+			id:      "config-schema-sync-check"
+			owner:   "shell"
+			command: "cuerail-config-schema-sync --check"
+			cueRef:  "#ConfigSchemaSync"
+			validates: ["generated config schema availability", "config schema lock freshness"]
+			inputs: ["cue/sync", "cue/generated/config", "config schema lock"]
+			outputs: ["validation status"]
+			failureMeaning: "Generated config schema is missing, stale, or inconsistent with the lock."
 		},
 		{
 			id:      "doctor"

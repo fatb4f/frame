@@ -56,6 +56,7 @@ $CODEX_HOME/tools/cuerail/
     cuerail-hook
     cuerail-doctor
     cuerail-schema-sync
+    cuerail-config-schema-sync
 
   cue.mod/
     module.cue
@@ -181,7 +182,7 @@ each fixture exports #HookManifest.output
 each fixture exports #HookManifest.capture.persist
 each supported fixture runs through cuerail-hook without fallback
 persisted manifest fixtures validate through turn.cue
-sh -n bin/cuerail-hook bin/cuerail-doctor bin/cuerail-schema-sync
+sh -n bin/cuerail-hook bin/cuerail-doctor bin/cuerail-schema-sync bin/cuerail-config-schema-sync
 ```
 
 ## Slice 1 exclusions

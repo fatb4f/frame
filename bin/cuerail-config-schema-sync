@@ -1,0 +1,136 @@
+#!/usr/bin/env sh
+set -eu
+
+die() {
+  printf 'cuerail-config-schema-sync: %s\n' "$1" >&2
+  exit 1
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+usage() {
+  printf 'usage: cuerail-config-schema-sync --sync|--check\n' >&2
+  exit 2
+}
+
+[ "$#" -eq 1 ] || usage
+case "$1" in
+  --sync|--check) mode=$1 ;;
+  *) usage ;;
+esac
+
+: "${CODEX_HOME:?CODEX_HOME is required}"
+: "${CODEX_STATE:?CODEX_STATE is required}"
+: "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"
+
+CUERAIL_STATE="${CUERAIL_STATE:-$CODEX_STATE/cuerail}"
+export CODEX_HOME CODEX_STATE CUERAIL_HOME CUERAIL_STATE
+
+case "$CUERAIL_HOME" in
+  "$CODEX_HOME"/tools/cuerail) ;;
+  *) die "CUERAIL_HOME must be CODEX_HOME/tools/cuerail" ;;
+esac
+
+CUE_DIR="$CUERAIL_HOME/cue"
+CUE_SYNC_PKG="./cue/sync"
+[ -d "$CUE_DIR" ] || die "missing active CUE package: $CUE_DIR"
+
+need codex
+need awk
+need cmp
+need cue
+need curl
+need jq
+need mkdir
+need mv
+need rm
+need sed
+need sha256sum
+need tr
+need wc
+
+version=$(
+  codex --version |
+    sed -n 's/.*\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' |
+    sed -n '1p'
+)
+[ -n "$version" ] || die "could not extract Codex semver from codex --version"
+
+schema_url=$(
+  (cd "$CUERAIL_HOME" && cue export "$CUE_SYNC_PKG" -e '#ConfigSchemaSync.schemaUrl') |
+    jq -r .
+)
+[ -n "$schema_url" ] && [ "$schema_url" != "null" ] || die "CUE did not provide a config schema URL"
+
+raw_dir="$CUERAIL_STATE/schemas/openai-codex/config-schema"
+lock_dir="$raw_dir"
+lock_file="$lock_dir/config-schema.lock.json"
+generated_cue_dir="$CUE_DIR/generated/config"
+raw_file="config-schema.json"
+generated_cue_file="$generated_cue_dir/config_schema.cue"
+
+tmp_base=${TMPDIR:-/tmp}/cuerail-config-schema.$$
+tmp_lock_json="$tmp_base.lock.json"
+trap 'rm -f "$tmp_base" "$tmp_base.raw" "$tmp_base.lock.json" "$tmp_base.cue" "$tmp_base.cue2"' EXIT HUP INT TERM
+
+write_lock_to() {
+  out=$1
+  [ -f "$raw_dir/$raw_file" ] || die "missing raw schema: $raw_dir/$raw_file"
+  sha=$(sha256sum "$raw_dir/$raw_file" | awk '{print $1}')
+  bytes=$(wc -c <"$raw_dir/$raw_file" | tr -d ' ')
+
+  jq -n \
+    --arg version "$version" \
+    --arg url "$schema_url" \
+    --arg path "$raw_file" \
+    --arg sha "$sha" \
+    --argjson bytes "$bytes" \
+    '{
+      provider: "developers.openai.com",
+      schemaPath: "/codex/config-schema.json",
+      schemaKind: "codex-config",
+      codexCliVersion: $version,
+      schemaUrl: $url,
+      files: [{
+        path: $path,
+        sha256: $sha,
+        bytes: $bytes
+      }]
+    }' >"$out"
+}
+
+case "$mode" in
+  --sync)
+    mkdir -p "$raw_dir" "$generated_cue_dir"
+    curl -fsSL "$schema_url" -o "$raw_dir/.$raw_file.tmp.$$"
+    mv "$raw_dir/.$raw_file.tmp.$$" "$raw_dir/$raw_file"
+
+    cue import jsonschema "$raw_dir/$raw_file" -p config -l '"#ConfigToml"' -o "$tmp_base.cue"
+    sed 's/^"#\([A-Za-z0-9_][A-Za-z0-9_]*\)": {$/#\1: {/' "$tmp_base.cue" >"$tmp_base.cue2"
+    mv "$tmp_base.cue2" "$generated_cue_file"
+    rm -f "$tmp_base.cue"
+
+    mkdir -p "$lock_dir"
+    write_lock_to "$tmp_lock_json"
+    (cd "$CUERAIL_HOME" && cue vet "$CUE_SYNC_PKG" "$tmp_lock_json" -d '#ConfigSchemaLock')
+    mv "$tmp_lock_json" "$lock_file"
+    (cd "$CUERAIL_HOME" && cue vet -c=false ./cue/generated/config)
+    ;;
+
+  --check)
+    [ -d "$raw_dir" ] || die "missing raw schema directory: $raw_dir"
+    [ -d "$generated_cue_dir" ] || die "missing imported CUE schema directory: $generated_cue_dir"
+    [ -f "$raw_dir/$raw_file" ] || die "missing raw schema: $raw_dir/$raw_file"
+    [ -f "$generated_cue_file" ] || die "missing imported CUE schema: $generated_cue_file"
+    [ -f "$lock_file" ] || die "missing schema lock: $lock_file"
+
+    (cd "$CUERAIL_HOME" && cue vet "$CUE_SYNC_PKG" "$lock_file" -d '#ConfigSchemaLock')
+    write_lock_to "$tmp_lock_json"
+    cmp -s "$tmp_lock_json" "$lock_file" || die "schema lock is stale: $lock_file"
+    (cd "$CUERAIL_HOME" && cue vet -c=false ./cue/generated/config)
+    ;;
+esac
+
+printf 'cuerail-config-schema-sync: %s %s\n' "${mode#--}" "$schema_url"

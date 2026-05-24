@@ -177,6 +177,15 @@ else
   mv "$notes_json_tmp" "$notes_json"
 fi
 
+config_schema_sync_status=skipped
+if [ -n "${CODEX_HOME:-}" ] && [ -n "${CODEX_STATE:-}" ] && command -v codex >/dev/null 2>&1; then
+  config_schema_sync_status=$(status_check "$CUERAIL_HOME/bin/cuerail-config-schema-sync" --check)
+else
+  notes_json_tmp=$notes_json.tmp
+  jq '. + ["config-schema-sync skipped because CODEX_HOME/CODEX_STATE or codex is unavailable"]' "$notes_json" >"$notes_json_tmp"
+  mv "$notes_json_tmp" "$notes_json"
+fi
+
 runtime_doctor_status=skipped
 if [ "$runtime_requested" = "true" ]; then
   runtime_doctor_status=$(status_check "$CUERAIL_HOME/bin/cuerail-doctor" runtime)
@@ -221,6 +230,7 @@ jq -n \
   --arg sourceDoctor "$source_doctor_status" \
   --arg cueVet "$cue_vet_status" \
   --arg schemaSync "$schema_sync_status" \
+  --arg configSchemaSync "$config_schema_sync_status" \
   --arg runtimeDoctor "$runtime_doctor_status" \
   --arg tokenUsagePath "$token_usage_path" \
   --arg tokenUsageAvailable "$token_usage_available" \
@@ -271,6 +281,7 @@ jq -n \
       sourceDoctor: $sourceDoctor,
       cueVet: $cueVet,
       schemaSync: $schemaSync,
+      configSchemaSync: $configSchemaSync,
       runtimeDoctor: $runtimeDoctor
     },
     tokenUsage: {

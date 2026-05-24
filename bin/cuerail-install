@@ -58,6 +58,7 @@ if [ -d "$CODEX_HOME/bin" ]; then
     cuerail-hook \
     cuerail-doctor \
     cuerail-schema-sync \
+    cuerail-config-schema-sync \
     cuerail-run \
     cuerail-mcp-ripgrep \
     cuerail-mcp-capture \
