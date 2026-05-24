@@ -12,6 +12,33 @@ need() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
 
+check_node_version() {
+  node_version=$(node --version | sed 's/^v//')
+  node_major=${node_version%%.*}
+  case "$node_major" in
+    ''|*[!0-9]*) die "cannot parse node version: $(node --version)" ;;
+  esac
+  [ "$node_major" -ge 18 ] ||
+    die "node >=18 required for mcp-ripgrep, got $(node --version)"
+}
+
+assert_ripgrep_mcp_config() {
+  config_file="$CODEX_HOME/config.toml"
+  expected_command="/home/_404/.local/share/codex/bin/cuerail-mcp-ripgrep"
+
+  [ -f "$config_file" ] || die "missing Codex config: $config_file"
+
+  awk -v expected_command="$expected_command" '
+    /^\[mcp_servers\.ripgrep\]$/ { in_section = 1; next }
+    /^\[/ && in_section { in_section = 0 }
+    in_section && $0 == "command = \"" expected_command "\"" { command_ok = 1 }
+    in_section && $0 == "args = []" { args_ok = 1 }
+    in_section && $0 == "env_vars = [\"PATH\", \"CODEX_STATE\"]" { env_ok = 1 }
+    END { exit(command_ok && args_ok && env_ok ? 0 : 1) }
+  ' "$config_file" ||
+    die "Codex MCP config missing ripgrep wrapper projection"
+}
+
 cleanup_temp_files() {
   [ -n "${output_json:-}" ] && rm -f "$output_json"
   [ -n "${stderr_log:-}" ] && rm -f "$stderr_log"
@@ -100,6 +127,7 @@ esac
 [ -x "$CUERAIL_HOME/bin/cuerail-doctor" ] || die "missing executable bin/cuerail-doctor"
 [ -x "$CUERAIL_HOME/bin/cuerail-schema-sync" ] || die "missing executable bin/cuerail-schema-sync"
 [ -x "$CUERAIL_HOME/bin/cuerail-adapter-export" ] || die "missing executable bin/cuerail-adapter-export"
+[ -x "$CUERAIL_HOME/bin/cuerail-mcp-ripgrep" ] || die "missing executable bin/cuerail-mcp-ripgrep"
 [ -x "$CUERAIL_HOME/bin/cuerail-git-mcp-go" ] || die "missing executable bin/cuerail-git-mcp-go"
 [ -x "$CUERAIL_HOME/bin/git-mcp-go-cuerail" ] || die "missing executable bin/git-mcp-go-cuerail"
 [ -d "$CUERAIL_HOME/cue" ] || die "missing active CUE package"
@@ -114,11 +142,20 @@ need mktemp
 need flock
 need mkdir
 need mv
+need node
 need rm
+need rg
 need sed
 need sha256sum
 need tr
 need wc
+
+check_node_version
+[ -x "/home/_404/.local/share/codex/bin/cuerail-mcp-ripgrep" ] ||
+  die "missing executable /home/_404/.local/share/codex/bin/cuerail-mcp-ripgrep"
+[ -x "$CODEX_STATE/cuerail/mcp/mcp-ripgrep/node_modules/.bin/mcp-ripgrep" ] ||
+  die "missing mcp-ripgrep package bin under CODEX_STATE"
+assert_ripgrep_mcp_config
 
 trap cleanup_temp_files EXIT HUP INT TERM
 
@@ -137,6 +174,7 @@ expected_persisted_count=0
   cue vet -c=false ./cue/runtime
   cue vet -c=false ./cue/sync
   cue export ./cue/adapters -e '#GitMCPGoAdapter' >/dev/null
+  cue export ./cue/adapters -e '#MCPRipgrepAdapter' >/dev/null
   cue export ./cue/sync -e '#ExpectedHookSchemaFiles' >/dev/null
   cue export ./cue/sync -e '#SchemaSync' >/dev/null
   cue export ./cue/sync -e '#ExampleSchemaLock' >/dev/null

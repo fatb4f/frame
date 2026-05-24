@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${CODEX_STATE:=$HOME/.local/state/codex}"
+
+prefix="$CODEX_STATE/cuerail/mcp/mcp-ripgrep"
+bin="$prefix/node_modules/.bin/mcp-ripgrep"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "cuerail-mcp-ripgrep: node not found on PATH" >&2
+  exit 127
+fi
+
+if ! command -v rg >/dev/null 2>&1; then
+  echo "cuerail-mcp-ripgrep: rg not found on PATH" >&2
+  exit 127
+fi
+
+if [ ! -x "$bin" ]; then
+  echo "cuerail-mcp-ripgrep: missing $bin" >&2
+  echo "Run: npm install --prefix \"$prefix\" mcp-ripgrep@0.4.0" >&2
+  exit 127
+fi
+
+exec "$bin"
