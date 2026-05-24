@@ -8,6 +8,10 @@ package cuerail
 			hook_event_name!: #CodexHookEvent
 			...
 		}
+		awareness!: {
+			plan!:    #AwarenessPlan
+			results!: [...#ReadResultEnvelope]
+		}
 		output!:  _
 		capture!: #CaptureDecision
 	}]

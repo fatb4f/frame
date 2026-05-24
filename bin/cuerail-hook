@@ -9,6 +9,9 @@ die() {
 cleanup_temp_files() {
   [ -n "${input_json:-}" ] && rm -f "$input_json"
   [ -n "${wrapped_json:-}" ] && rm -f "$wrapped_json"
+  [ -n "${wrapped_with_results_json:-}" ] && rm -f "$wrapped_with_results_json"
+  [ -n "${plan_json:-}" ] && rm -f "$plan_json"
+  [ -n "${results_json:-}" ] && rm -f "$results_json"
   [ -n "${output_json:-}" ] && rm -f "$output_json"
   [ -n "${persist_json:-}" ] && rm -f "$persist_json"
   [ -n "${manifest_cue:-}" ] && rm -f "$manifest_cue"
@@ -17,6 +20,64 @@ cleanup_temp_files() {
 
 safe_component() {
   printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_'
+}
+
+execute_awareness_plan() {
+  plan=$1
+  results=$2
+  tmp_results=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-results.XXXXXX.json")
+  printf '[]\n' >"$tmp_results"
+
+  jq -c '.ops[]?' "$plan" | while IFS= read -r op_json; do
+    op_file=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-op.XXXXXX.json")
+    raw_file=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-raw.XXXXXX.json")
+    err_file=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-error.XXXXXX.txt")
+    env_file=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-envelope.XXXXXX.json")
+    printf '%s\n' "$op_json" >"$op_file"
+
+    if [ -n "${CUERAIL_MCP_READ_EXECUTOR:-}" ]; then
+      if "$CUERAIL_MCP_READ_EXECUTOR" "$op_file" >"$raw_file" 2>"$err_file"; then
+        jq -n --slurpfile op "$op_file" --rawfile raw "$raw_file" '
+          {
+            id: $op[0].id,
+            status: "ok",
+            substrate: $op[0].substrate,
+            tool: $op[0].tool,
+            op: $op[0].op,
+            input: $op[0].input,
+            raw: $raw
+          }' >"$env_file"
+      else
+        jq -n --slurpfile op "$op_file" --rawfile error "$err_file" '
+          {
+            id: $op[0].id,
+            status: "error",
+            substrate: $op[0].substrate,
+            tool: $op[0].tool,
+            op: $op[0].op,
+            input: $op[0].input,
+            error: $error
+          }' >"$env_file"
+      fi
+    else
+      jq -n --slurpfile op "$op_file" '
+        {
+          id: $op[0].id,
+          status: "error",
+          substrate: $op[0].substrate,
+          tool: $op[0].tool,
+          op: $op[0].op,
+          input: $op[0].input,
+          error: "no MCP read executor configured"
+        }' >"$env_file"
+    fi
+
+    jq --slurpfile env "$env_file" '. + [$env[0]]' "$tmp_results" >"$results.tmp"
+    mv "$results.tmp" "$tmp_results"
+    rm -f "$op_file" "$raw_file" "$err_file" "$env_file"
+  done
+
+  mv "$tmp_results" "$results"
 }
 
 event_slug() {
@@ -63,6 +124,9 @@ command -v tr >/dev/null 2>&1 || die "missing required command: tr"
 
 input_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook.XXXXXX.json")
 wrapped_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-wrapped.XXXXXX.json")
+wrapped_with_results_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-wrapped-results.XXXXXX.json")
+plan_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-plan.XXXXXX.json")
+results_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-results.XXXXXX.json")
 output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-output.XXXXXX.json")
 persist_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-persist.XXXXXX.json")
 manifest_cue=
@@ -77,15 +141,24 @@ jq -c '{hookInput: .}' "$input_json" >"$wrapped_json" || die "could not wrap hoo
 
 if (
   cd "$CUERAIL_HOME" &&
-  cue export ./cue/runtime "$wrapped_json" -e '#HookManifest.output' >"$output_json" &&
-  cue export ./cue/runtime "$wrapped_json" -e '#HookManifest.capture.persist' >"$persist_json"
+  cue export ./cue/runtime "$wrapped_json" -e '#HookManifest.awareness.plan' >"$plan_json"
 ); then
+  execute_awareness_plan "$plan_json" "$results_json"
+  jq -c --slurpfile results "$results_json" '. + {awarenessResults: $results[0]}' \
+    "$wrapped_json" >"$wrapped_with_results_json" || die "could not inject awareness results"
+
+  (
+    cd "$CUERAIL_HOME" &&
+    cue export ./cue/runtime "$wrapped_with_results_json" -e '#HookManifest.output' >"$output_json" &&
+    cue export ./cue/runtime "$wrapped_with_results_json" -e '#HookManifest.capture.persist' >"$persist_json"
+  ) || die "could not export hook output"
+
   persist=$(jq -r 'if . == true then "true" else "false" end' "$persist_json") ||
     die "invalid capture persist output"
 
   if [ "$persist" = "true" ]; then
     session_id=$(jq -r '.session_id // empty' "$input_json") || die "invalid hook JSON"
-    turn_id=$(jq -r '.turn_id // empty' "$input_json") || die "invalid hook JSON"
+    turn_id=$(jq -r '.turn_id // "session-start"' "$input_json") || die "invalid hook JSON"
 
     [ -n "$session_id" ] || die "persisted hook missing session_id"
     [ -n "$turn_id" ] || die "persisted hook missing turn_id"
@@ -117,7 +190,7 @@ if (
 
       (
         cd "$CUERAIL_HOME" &&
-        cue export ./cue/runtime "$wrapped_json" -e '#HookManifest' --out cue >"$manifest_cue" &&
+        cue export ./cue/runtime "$wrapped_with_results_json" -e '#HookManifest' --out cue >"$manifest_cue" &&
         cue vet -c=false ./cue/runtime "$manifest_cue" -d '#HookManifest'
       ) || die "could not export or validate hook manifest"
 

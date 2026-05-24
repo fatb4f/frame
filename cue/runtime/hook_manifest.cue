@@ -8,6 +8,10 @@ hookInput: {
 
 _hookInput: hookInput
 
+awarenessResults: [...#ReadResultEnvelope] | *[]
+
+_awarenessResults: awarenessResults
+
 #HookInputByEvent: {
 	"SessionStart":      hooks.#SessionStartCommandInput
 	"UserPromptSubmit":  hooks.#UserPromptSubmitCommandInput
@@ -47,9 +51,13 @@ _hookInput: hookInput
 
 #SessionStartHookManifest: {
 	input: hooks.#SessionStartCommandInput & _hookInput
+	awareness: {
+		plan:    #SessionStartAwarenessPlan
+		results: _awarenessResults
+	}
 	output: hooks.#SessionStartCommandOutput
 	capture: #CaptureDecision & {
-		persist:   false
+		persist:   true
 		eventSlug: "session-start"
 		fileStem:  eventSlug
 	}
@@ -57,6 +65,10 @@ _hookInput: hookInput
 
 #UserPromptSubmitHookManifest: {
 	input: hooks.#UserPromptSubmitCommandInput & _hookInput
+	awareness: {
+		plan:    #UserPromptSubmitAwarenessPlan
+		results: _awarenessResults
+	}
 	output: hooks.#UserPromptSubmitCommandOutput
 	capture: #CaptureDecision & {
 		persist:   true
@@ -67,9 +79,13 @@ _hookInput: hookInput
 
 #PreToolUseHookManifest: {
 	input: hooks.#PreToolUseCommandInput & _hookInput
+	awareness: {
+		plan:    #PreToolUseAwarenessPlan
+		results: _awarenessResults
+	}
 	output: hooks.#PreToolUseCommandOutput
 	capture: #CaptureDecision & {
-		persist:   false
+		persist:   true
 		eventSlug: "pre-tool-use"
 		fileStem:  eventSlug
 	}
@@ -77,6 +93,10 @@ _hookInput: hookInput
 
 #PermissionRequestHookManifest: {
 	input: hooks.#PermissionRequestCommandInput & _hookInput
+	awareness: {
+		plan:    #NoAwarenessPlan & {phase: "PermissionRequest"}
+		results: _awarenessResults
+	}
 	output: hooks.#PermissionRequestCommandOutput
 	capture: #CaptureDecision & {
 		persist:   false
@@ -87,6 +107,10 @@ _hookInput: hookInput
 
 #PostToolUseHookManifest: {
 	input: hooks.#PostToolUseCommandInput & _hookInput
+	awareness: {
+		plan:    #PostToolUseAwarenessPlan
+		results: _awarenessResults
+	}
 	output: hooks.#PostToolUseCommandOutput
 	capture: #CaptureDecision & {
 		eventSlug: "post-tool-use"
@@ -109,6 +133,10 @@ _hookInput: hookInput
 
 #PreCompactHookManifest: {
 	input: hooks.#PreCompactCommandInput & _hookInput
+	awareness: {
+		plan:    #NoAwarenessPlan & {phase: "PreCompact"}
+		results: _awarenessResults
+	}
 	output: hooks.#PreCompactCommandOutput
 	capture: #CaptureDecision & {
 		persist:   false
@@ -119,6 +147,10 @@ _hookInput: hookInput
 
 #PostCompactHookManifest: {
 	input: hooks.#PostCompactCommandInput & _hookInput
+	awareness: {
+		plan:    #NoAwarenessPlan & {phase: "PostCompact"}
+		results: _awarenessResults
+	}
 	output: hooks.#PostCompactCommandOutput
 	capture: #CaptureDecision & {
 		persist:   false
@@ -129,6 +161,10 @@ _hookInput: hookInput
 
 #SubagentStartHookManifest: {
 	input: hooks.#SubagentStartCommandInput & _hookInput
+	awareness: {
+		plan:    #NoAwarenessPlan & {phase: "SubagentStart"}
+		results: _awarenessResults
+	}
 	output: hooks.#SubagentStartCommandOutput
 	capture: #CaptureDecision & {
 		persist:   false
@@ -139,6 +175,10 @@ _hookInput: hookInput
 
 #SubagentStopHookManifest: {
 	input: hooks.#SubagentStopCommandInput & _hookInput
+	awareness: {
+		plan:    #NoAwarenessPlan & {phase: "SubagentStop"}
+		results: _awarenessResults
+	}
 	output: hooks.#SubagentStopCommandOutput
 	capture: #CaptureDecision & {
 		persist:   false
@@ -149,6 +189,10 @@ _hookInput: hookInput
 
 #StopHookManifest: {
 	input: hooks.#StopCommandInput & _hookInput
+	awareness: {
+		plan:    #StopAwarenessPlan
+		results: _awarenessResults
+	}
 	output: hooks.#StopCommandOutput
 	capture: #CaptureDecision & {
 		persist:   true

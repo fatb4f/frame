@@ -549,7 +549,7 @@ fixture_wrap_json=
 fixture_persist_json=
 
 persisted_count=0
-for manifest in "$doctor_fixture_turns"/session-example/turn-example/events/*.cue; do
+for manifest in "$doctor_fixture_turns"/session-example/*/events/*.cue; do
   [ -f "$manifest" ] || continue
   validate_manifest_schema "$manifest"
   persisted_count=$((persisted_count + 1))
@@ -568,8 +568,9 @@ hardening_events_dir="$doctor_hardening_turns/session-example/turn-example/event
 
 expected_filenames='000001-user-prompt-submit.cue
 000002-post-tool-use.mcp-ripgrep.cue
-000003-post-tool-use.git-mcp-server.cue
-000004-stop.cue'
+000003-pre-tool-use.cue
+000004-post-tool-use.git-mcp-server.cue
+000005-stop.cue'
 
 actual_filenames=
 hardening_count=0
@@ -587,7 +588,6 @@ done
 
 for ignored_name in \
   000002-post-tool-use.cue \
-  000004-pre-tool-use.cue \
   000004-post-tool-use.cue \
   000005-post-tool-use.cue \
   000006-post-tool-use.cue
@@ -596,8 +596,8 @@ do
     die "ignored_event_persisted: $ignored_name"
 done
 
-[ "$hardening_count" -eq 4 ] ||
-  die "wrong_count: got $hardening_count expected 4"
+[ "$hardening_count" -eq 5 ] ||
+  die "wrong_count: got $hardening_count expected 5"
 
 expected_seq=1
 for manifest in "$hardening_events_dir"/*.cue; do
@@ -615,13 +615,15 @@ done
 
 validate_manifest_schema "$hardening_events_dir/000001-user-prompt-submit.cue"
 validate_manifest_schema "$hardening_events_dir/000002-post-tool-use.mcp-ripgrep.cue"
-validate_manifest_schema "$hardening_events_dir/000003-post-tool-use.git-mcp-server.cue"
-validate_manifest_schema "$hardening_events_dir/000004-stop.cue"
+validate_manifest_schema "$hardening_events_dir/000003-pre-tool-use.cue"
+validate_manifest_schema "$hardening_events_dir/000004-post-tool-use.git-mcp-server.cue"
+validate_manifest_schema "$hardening_events_dir/000005-stop.cue"
 
 assert_manifest_content "$hardening_events_dir/000001-user-prompt-submit.cue" "UserPromptSubmit" ""
 assert_manifest_content "$hardening_events_dir/000002-post-tool-use.mcp-ripgrep.cue" "PostToolUse" "mcp-ripgrep"
-assert_manifest_content "$hardening_events_dir/000003-post-tool-use.git-mcp-server.cue" "PostToolUse" "git-mcp-server"
-assert_manifest_content "$hardening_events_dir/000004-stop.cue" "Stop" ""
+assert_manifest_content "$hardening_events_dir/000003-pre-tool-use.cue" "PreToolUse" ""
+assert_manifest_content "$hardening_events_dir/000004-post-tool-use.git-mcp-server.cue" "PostToolUse" "git-mcp-server"
+assert_manifest_content "$hardening_events_dir/000005-stop.cue" "Stop" ""
 
 if [ "$mode" = "all" ]; then
   run_runtime_checks

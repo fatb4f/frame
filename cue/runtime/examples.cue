@@ -42,8 +42,16 @@ package cuerail
 	turn_id:         "turn-example"
 }
 
+#ExampleSessionStartManifest: #SessionStartHookManifest & {
+	input: #ExampleSessionStartHookInput
+}
+
 #ExampleUserPromptSubmitManifest: #UserPromptSubmitHookManifest & {
 	input: #ExampleUserPromptSubmitHookInput
+}
+
+#ExamplePreToolUseManifest: #PreToolUseHookManifest & {
+	input: #ExamplePreToolUseHookInput
 }
 
 #ExamplePostToolUseRipgrepManifest: #PostToolUseHookManifest & {

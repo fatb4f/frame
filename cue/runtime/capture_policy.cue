@@ -5,6 +5,7 @@ package cuerail
 #CapturePolicy: {
 	persist: {
 		events: ["UserPromptSubmit", "Stop"]
+		plannedAwarenessEvents: ["SessionStart", "PreToolUse", "Stop"]
 		postToolUse: [#CapturedPostToolUseName]
 	}
 }

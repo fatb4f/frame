@@ -78,6 +78,30 @@ assert_manifest_content() {
   manifest_json=
 }
 
+assert_awareness_trace() {
+  manifest=$1
+  expected_phase=$2
+  expected_ops=$3
+
+  manifest_json=$(mktemp "${TMPDIR:-/tmp}/frame-doctor-manifest.XXXXXX.json")
+  (
+    cd "$FRAME_HOME"
+    cue export "$manifest" >"$manifest_json"
+  ) || die "could not export manifest: $(basename "$manifest")"
+
+  jq -e --arg phase "$expected_phase" --argjson expectedOps "$expected_ops" '
+    .awareness.plan.phase == $phase and
+    (.awareness.plan.ops | length) == $expectedOps and
+    (.awareness.results | length) == $expectedOps and
+    all(.awareness.plan.ops[]?; .substrate == "mcp" and .readOnly == true and (.tool == "git-mcp-server" or .tool == "mcp-ripgrep")) and
+    all(.awareness.results[]?; .substrate == "mcp" and (.tool == "git-mcp-server" or .tool == "mcp-ripgrep") and (has("output") | not))
+  ' "$manifest_json" >/dev/null ||
+    die "wrong_awareness_trace: $(basename "$manifest")"
+
+  rm -f "$manifest_json"
+  manifest_json=
+}
+
 FRAME_HOME="${FRAME_HOME:-$(resolve_source_home)}"
 
 need basename
@@ -95,7 +119,9 @@ doctor_state=$(mktemp -d "${TMPDIR:-/tmp}/frame-doctor-state.XXXXXX")
 (
   cd "$FRAME_HOME"
   cue vet -c=false ./cue/runtime
+  cue export ./cue/runtime -e '#ExampleSessionStartManifest' >/dev/null
   cue export ./cue/runtime -e '#ExampleUserPromptSubmitManifest' >/dev/null
+  cue export ./cue/runtime -e '#ExamplePreToolUseManifest' >/dev/null
   cue export ./cue/runtime -e '#ExamplePostToolUseRipgrepManifest' >/dev/null
   cue export ./cue/runtime -e '#ExamplePostToolUseGitManifest' >/dev/null
   cue export ./cue/runtime -e '#ExampleUncapturedPostToolUseManifest' >/dev/null
@@ -103,7 +129,9 @@ doctor_state=$(mktemp -d "${TMPDIR:-/tmp}/frame-doctor-state.XXXXXX")
   cue export ./cue/runtime -e '#ExampleTurnTrace' >/dev/null
 )
 
+run_fixture "$FRAME_HOME/test/fixtures/hooks/session-start.json"
 run_fixture "$FRAME_HOME/test/fixtures/hooks/user-prompt-submit.json"
+run_fixture "$FRAME_HOME/test/fixtures/hooks/pre-tool-use.json"
 run_fixture "$FRAME_HOME/test/fixtures/hooks/post-tool-use.mcp-ripgrep.json"
 run_fixture "$FRAME_HOME/test/fixtures/hooks/post-tool-use.git-mcp-server.json"
 run_fixture "$FRAME_HOME/test/fixtures/hooks/post-tool-use.unrelated.json"
@@ -112,10 +140,20 @@ run_fixture "$FRAME_HOME/test/fixtures/hooks/stop.json"
 turn_dir="$doctor_state/frame/turns/session-example/turn-example"
 [ -d "$turn_dir" ] || die "missing turn manifest directory"
 
+session_dir="$doctor_state/frame/turns/session-example/session-start"
+[ -d "$session_dir" ] || die "missing session-start manifest directory"
+
+session_manifest="$session_dir/000001-session-start.cue"
+[ -f "$session_manifest" ] || die "missing session-start manifest"
+validate_manifest "$session_manifest"
+assert_manifest_content "$session_manifest" "SessionStart" ""
+assert_awareness_trace "$session_manifest" "SessionStart" 1
+
 expected_filenames='000001-user-prompt-submit.cue
-000002-post-tool-use.mcp-ripgrep.cue
-000003-post-tool-use.git-mcp-server.cue
-000004-stop.cue'
+000002-pre-tool-use.cue
+000003-post-tool-use.mcp-ripgrep.cue
+000004-post-tool-use.git-mcp-server.cue
+000005-stop.cue'
 
 actual_filenames=
 manifest_count=0
@@ -132,18 +170,25 @@ ${base_name}"
   validate_manifest "$manifest"
 done
 
-[ "$manifest_count" -eq 4 ] ||
-  die "wrong persisted manifest count: got $manifest_count expected 4"
+[ "$manifest_count" -eq 5 ] ||
+  die "wrong persisted manifest count: got $manifest_count expected 5"
 
 [ "$actual_filenames" = "$expected_filenames" ] ||
   die "wrong filename set: $(printf '%s' "$actual_filenames" | tr '\n' ' ')"
 
-[ ! -e "$turn_dir/000004-post-tool-use.cue" ] ||
+[ ! -e "$turn_dir/000005-post-tool-use.cue" ] ||
   die "unrelated PostToolUse persisted"
 
 assert_manifest_content "$turn_dir/000001-user-prompt-submit.cue" "UserPromptSubmit" ""
-assert_manifest_content "$turn_dir/000002-post-tool-use.mcp-ripgrep.cue" "PostToolUse" "mcp-ripgrep"
-assert_manifest_content "$turn_dir/000003-post-tool-use.git-mcp-server.cue" "PostToolUse" "git-mcp-server"
-assert_manifest_content "$turn_dir/000004-stop.cue" "Stop" ""
+assert_manifest_content "$turn_dir/000002-pre-tool-use.cue" "PreToolUse" ""
+assert_manifest_content "$turn_dir/000003-post-tool-use.mcp-ripgrep.cue" "PostToolUse" "mcp-ripgrep"
+assert_manifest_content "$turn_dir/000004-post-tool-use.git-mcp-server.cue" "PostToolUse" "git-mcp-server"
+assert_manifest_content "$turn_dir/000005-stop.cue" "Stop" ""
+
+assert_awareness_trace "$turn_dir/000001-user-prompt-submit.cue" "UserPromptSubmit" 0
+assert_awareness_trace "$turn_dir/000002-pre-tool-use.cue" "PreToolUse" 1
+assert_awareness_trace "$turn_dir/000003-post-tool-use.mcp-ripgrep.cue" "PostToolUse" 0
+assert_awareness_trace "$turn_dir/000004-post-tool-use.git-mcp-server.cue" "PostToolUse" 0
+assert_awareness_trace "$turn_dir/000005-stop.cue" "Stop" 2
 
 printf 'frame-doctor: hook runtime nucleus ok\n'
