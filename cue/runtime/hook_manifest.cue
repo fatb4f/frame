@@ -21,6 +21,22 @@ awarenessExecutionReason?: string
 
 _awarenessExecutionReason: awarenessExecutionReason
 
+agentFeedbackContext: string | *""
+
+_agentFeedbackContext: agentFeedbackContext
+
+agentFeedbackMaxBytes: int & >=0 | *8000
+
+_agentFeedbackMaxBytes: agentFeedbackMaxBytes
+
+agentFeedbackTruncated: bool | *false
+
+_agentFeedbackTruncated: agentFeedbackTruncated
+
+agentFeedbackSource: string | *""
+
+_agentFeedbackSource: agentFeedbackSource
+
 #AwarenessExecution: {
 	executable: _awarenessExecutable
 	if _awarenessExecutable == false {
@@ -32,34 +48,29 @@ _awarenessExecutionReason: awarenessExecutionReason
 
 #AgentFeedStatus: "not_attempted" | "emitted" | "unsupported_event" | "invalid_output"
 
+#AgentFeedPayloadKind: "none" | "pointer" | "raw.awareness.results" | "raw.tool.response" | "summary"
+
 #AgentFeed: {
-	enabled!: bool
-	channel?: #AgentFeedChannel
-	status!:  #AgentFeedStatus
-	bytes?:   int & >=0
+	enabled!:     bool
+	channel?:     #AgentFeedChannel
+	status!:      #AgentFeedStatus
+	payloadKind!: #AgentFeedPayloadKind | *"none"
+	bytes?:       int & >=0
+	maxBytes?:    int & >=0
+	truncated?:   bool
+	source?:      string
 }
 
 #NoAgentFeed: #AgentFeed & {
-	enabled: false
-	status:  "not_attempted"
+	enabled:     false
+	status:      "not_attempted"
+	payloadKind: "none"
 }
-
-#PreToolUseAgentContext: string | *""
 
 #PreToolUseAgentFeed: #AgentFeed & {
-	enabled: *false | bool
-	status:  *"not_attempted" | #AgentFeedStatus
-}
-
-if _hookInput.hook_event_name == "PreToolUse" && len(_awarenessResults) > 0 {
-	#PreToolUseAgentContext: "Cuerail observed repo evidence: PreToolUse awareness ran \(_awarenessResults[0].id) via \(_awarenessResults[0].tool). Full evidence persisted under .cuerail/runs/\(_hookInput.session_id)/\(_hookInput.turn_id)/events."
-
-	#PreToolUseAgentFeed: #AgentFeed & {
-		enabled: true
-		channel: "stdout.additionalContext"
-		status:  "emitted"
-		bytes:   len(#PreToolUseAgentContext) & <=1000
-	}
+	enabled:     *false | bool
+	status:      *"not_attempted" | #AgentFeedStatus
+	payloadKind: *"none" | #AgentFeedPayloadKind
 }
 
 #HookInputByEvent: {
@@ -105,7 +116,7 @@ if _hookInput.hook_event_name == "PreToolUse" && len(_awarenessResults) > 0 {
 		results: _awarenessResults
 		#AwarenessExecution
 	}
-	output: hooks.#SessionStartCommandOutput
+	output:    hooks.#SessionStartCommandOutput
 	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
@@ -120,7 +131,7 @@ if _hookInput.hook_event_name == "PreToolUse" && len(_awarenessResults) > 0 {
 		results: _awarenessResults
 		#AwarenessExecution
 	}
-	output: hooks.#UserPromptSubmitCommandOutput
+	output:    hooks.#UserPromptSubmitCommandOutput
 	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
@@ -136,14 +147,25 @@ if _hookInput.hook_event_name == "PreToolUse" && len(_awarenessResults) > 0 {
 		#AwarenessExecution
 	}
 	output: hooks.#PreToolUseCommandOutput & {
-		if #PreToolUseAgentFeed.status == "emitted" {
+		if len(_awarenessResults) > 0 && _agentFeedbackContext != "" {
 			hookSpecificOutput: {
-				hookEventName:      "PreToolUse"
-				additionalContext: #PreToolUseAgentContext
+				hookEventName:     "PreToolUse"
+				additionalContext: _agentFeedbackContext
 			}
 		}
 	}
-	agentFeed: #PreToolUseAgentFeed
+	agentFeed: #PreToolUseAgentFeed & {
+		if len(_awarenessResults) > 0 && _agentFeedbackContext != "" {
+			enabled:     true
+			channel:     "stdout.additionalContext"
+			status:      "emitted"
+			payloadKind: "raw.awareness.results"
+			bytes:       len(_agentFeedbackContext)
+			maxBytes:    _agentFeedbackMaxBytes
+			truncated:   _agentFeedbackTruncated
+			source:      _agentFeedbackSource
+		}
+	}
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -153,11 +175,11 @@ if _hookInput.hook_event_name == "PreToolUse" && len(_awarenessResults) > 0 {
 	input: hooks.#PermissionRequestCommandInput & _hookInput
 	let captureInput = input
 	awareness: {
-		plan:    #NoAwarenessPlan & {phase: "PermissionRequest"}
+		plan: #NoAwarenessPlan & {phase: "PermissionRequest"}
 		results: _awarenessResults
 		#AwarenessExecution
 	}
-	output: hooks.#PermissionRequestCommandOutput
+	output:    hooks.#PermissionRequestCommandOutput
 	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
@@ -172,7 +194,7 @@ if _hookInput.hook_event_name == "PreToolUse" && len(_awarenessResults) > 0 {
 		results: _awarenessResults
 		#AwarenessExecution
 	}
-	output: hooks.#PostToolUseCommandOutput
+	output:    hooks.#PostToolUseCommandOutput
 	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
@@ -183,11 +205,11 @@ if _hookInput.hook_event_name == "PreToolUse" && len(_awarenessResults) > 0 {
 	input: hooks.#PreCompactCommandInput & _hookInput
 	let captureInput = input
 	awareness: {
-		plan:    #NoAwarenessPlan & {phase: "PreCompact"}
+		plan: #NoAwarenessPlan & {phase: "PreCompact"}
 		results: _awarenessResults
 		#AwarenessExecution
 	}
-	output: hooks.#PreCompactCommandOutput
+	output:    hooks.#PreCompactCommandOutput
 	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
@@ -198,11 +220,11 @@ if _hookInput.hook_event_name == "PreToolUse" && len(_awarenessResults) > 0 {
 	input: hooks.#PostCompactCommandInput & _hookInput
 	let captureInput = input
 	awareness: {
-		plan:    #NoAwarenessPlan & {phase: "PostCompact"}
+		plan: #NoAwarenessPlan & {phase: "PostCompact"}
 		results: _awarenessResults
 		#AwarenessExecution
 	}
-	output: hooks.#PostCompactCommandOutput
+	output:    hooks.#PostCompactCommandOutput
 	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
@@ -213,11 +235,11 @@ if _hookInput.hook_event_name == "PreToolUse" && len(_awarenessResults) > 0 {
 	input: hooks.#SubagentStartCommandInput & _hookInput
 	let captureInput = input
 	awareness: {
-		plan:    #NoAwarenessPlan & {phase: "SubagentStart"}
+		plan: #NoAwarenessPlan & {phase: "SubagentStart"}
 		results: _awarenessResults
 		#AwarenessExecution
 	}
-	output: hooks.#SubagentStartCommandOutput
+	output:    hooks.#SubagentStartCommandOutput
 	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
@@ -228,11 +250,11 @@ if _hookInput.hook_event_name == "PreToolUse" && len(_awarenessResults) > 0 {
 	input: hooks.#SubagentStopCommandInput & _hookInput
 	let captureInput = input
 	awareness: {
-		plan:    #NoAwarenessPlan & {phase: "SubagentStop"}
+		plan: #NoAwarenessPlan & {phase: "SubagentStop"}
 		results: _awarenessResults
 		#AwarenessExecution
 	}
-	output: hooks.#SubagentStopCommandOutput
+	output:    hooks.#SubagentStopCommandOutput
 	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
@@ -247,7 +269,7 @@ if _hookInput.hook_event_name == "PreToolUse" && len(_awarenessResults) > 0 {
 		results: _awarenessResults
 		#AwarenessExecution
 	}
-	output: hooks.#StopCommandOutput
+	output:    hooks.#StopCommandOutput
 	agentFeed: #NoAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput

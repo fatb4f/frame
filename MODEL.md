@@ -71,13 +71,17 @@ into the live agent loop:
   enabled: bool
   channel?: "stdout.additionalContext" | "stdout.systemMessage" | "continue.reason"
   status:  "not_attempted" | "emitted" | "unsupported_event" | "invalid_output"
+  payloadKind: "none" | "pointer" | "raw.awareness.results" | "raw.tool.response" | "summary"
   bytes?:  int & >=0
+  maxBytes?: int & >=0
+  truncated?: bool
+  source?: string
 }
 ```
 
-Full hook evidence stays in the turn artifacts. If a hook emits live context,
-it must be a small bounded summary and the manifest must record the channel,
-status, and byte count.
+Full hook evidence stays in the turn artifacts. If a hook emits live context, it
+must be bounded and the manifest must record the channel, status, payload kind,
+byte count, budget, truncation state, and source.
 
 ## Output taxonomy
 

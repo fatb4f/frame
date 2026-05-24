@@ -13,6 +13,7 @@ cleanup_temp_files() {
   [ -n "${plan_json:-}" ] && rm -f "$plan_json"
   [ -n "${results_json:-}" ] && rm -f "$results_json"
   [ -n "${awareness_meta_json:-}" ] && rm -f "$awareness_meta_json"
+  [ -n "${agent_feedback_json:-}" ] && rm -f "$agent_feedback_json"
   [ -n "${output_json:-}" ] && rm -f "$output_json"
   [ -n "${persist_json:-}" ] && rm -f "$persist_json"
   [ -n "${file_stem_json:-}" ] && rm -f "$file_stem_json"
@@ -123,6 +124,7 @@ wrapped_with_results_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-wrapped-results
 plan_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-plan.XXXXXX.json")
 results_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-results.XXXXXX.json")
 awareness_meta_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-awareness-meta.XXXXXX.json")
+agent_feedback_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-agent-feedback.XXXXXX.json")
 output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-output.XXXXXX.json")
 persist_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-persist.XXXXXX.json")
 file_stem_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-file-stem.XXXXXX.json")
@@ -145,6 +147,32 @@ if (
     '. + {awarenessResults: $results[0], awarenessExecutable: $meta[0].awarenessExecutable} +
       (if ($meta[0].reason? // "") != "" then {awarenessExecutionReason: $meta[0].reason} else {} end)' \
     "$wrapped_json" >"$wrapped_with_results_json" || die "could not inject awareness results"
+
+  jq -c --argjson maxBytes "${CUERAIL_AGENT_FEEDBACK_MAX_BYTES:-8000}" '
+    if .hookInput.hook_event_name == "PreToolUse" and ((.awarenessResults // []) | length) > 0 then
+      ({
+        schemaVersion: "cuerail.agentFeedback.raw.v1",
+        hookEventName: .hookInput.hook_event_name,
+        sessionId: .hookInput.session_id,
+        turnId: (.hookInput.turn_id // null),
+        eventPath: null,
+        awareness: ({
+          executable: (.awarenessExecutable // true),
+          results: .awarenessResults
+        } + (if (.awarenessExecutionReason? // "") != "" then {reason: .awarenessExecutionReason} else {} end))
+      } | "Cuerail raw awareness feedback:\n" + tojson) as $fullContext |
+      . + {
+        agentFeedbackContext: ($fullContext[0:$maxBytes]),
+        agentFeedbackMaxBytes: $maxBytes,
+        agentFeedbackTruncated: (($fullContext | length) > $maxBytes),
+        agentFeedbackSource: "awareness.results"
+      }
+    else
+      .
+    end' "$wrapped_with_results_json" >"$agent_feedback_json" ||
+    die "could not build agent feedback context"
+  mv "$agent_feedback_json" "$wrapped_with_results_json" ||
+    die "could not inject agent feedback context"
 
   (
     cd "$CUERAIL_HOME" &&

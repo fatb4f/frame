@@ -9,13 +9,13 @@ package cuerail
 			...
 		}
 		awareness!: {
-			plan!:    #AwarenessPlan
+			plan!: #AwarenessPlan
 			results!: [...#ReadResultEnvelope]
 			executable!: bool
 			reason?:     string
 		}
-		output!:  _
+		output!:    _
 		agentFeed!: #AgentFeed
-		capture!: #CaptureDecision
+		capture!:   #CaptureDecision
 	}]
 }

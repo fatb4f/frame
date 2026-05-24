@@ -271,7 +271,11 @@ jq -n '{
     input: {},
     status: "ok",
     raw: {}
-  }]
+  }],
+  agentFeedbackContext: "Cuerail raw awareness feedback:\n{\"schemaVersion\":\"cuerail.agentFeedback.raw.v1\",\"hookEventName\":\"PreToolUse\",\"eventPath\":null,\"awareness\":{\"results\":[{\"id\":\"pre-tool-use.rg.tool-policy\"}]}}",
+  agentFeedbackMaxBytes: 8000,
+  agentFeedbackTruncated: false,
+  agentFeedbackSource: "awareness.results"
 }' >"$output_json"
 (
   cd "$CUERAIL_HOME"
@@ -280,14 +284,30 @@ jq -n '{
       .agentFeed.enabled == true and
       .agentFeed.channel == "stdout.additionalContext" and
       .agentFeed.status == "emitted" and
+      .agentFeed.payloadKind == "raw.awareness.results" and
       .agentFeed.bytes > 0 and
+      .agentFeed.maxBytes == 8000 and
+      (.agentFeed.truncated | type) == "boolean" and
+      .agentFeed.source == "awareness.results" and
       .output.hookSpecificOutput.hookEventName == "PreToolUse" and
+      (.output.hookSpecificOutput.additionalContext | contains("cuerail.agentFeedback.raw.v1")) and
+      (.output.hookSpecificOutput.additionalContext | contains("pre-tool-use.rg.tool-policy")) and
       (.output.hookSpecificOutput.additionalContext | length) == .agentFeed.bytes and
-      (.output.hookSpecificOutput.additionalContext | length) <= 1000
+      (.output.hookSpecificOutput.additionalContext | length) <= .agentFeed.maxBytes
     ' >/dev/null
 ) || die "agent_feed_projection_invalid"
 rm -f "$output_json"
 output_json=
+
+(
+  cd "$CUERAIL_HOME"
+  cue export ./cue/runtime -e '#ExamplePreToolUseManifest' |
+    jq -e '
+      .agentFeed.enabled == false and
+      .agentFeed.payloadKind == "none" and
+      (.output.hookSpecificOutput.additionalContext? | not)
+    ' >/dev/null
+) || die "agent_feed_negative_projection_invalid"
 
 for fixture in "$CUERAIL_HOME"/test/fixtures/token-usage/*.txt; do
   [ -f "$fixture" ] || continue

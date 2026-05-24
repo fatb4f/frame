@@ -144,9 +144,11 @@ Hook persistence and live agent context are separate. Every persisted hook
 manifest includes `agentFeed` so a run can distinguish durable evidence from
 stdout that Codex actually accepts as context.
 
-The runtime may emit a small `hookSpecificOutput.additionalContext` summary when
-that evidence is useful for the next agent action. Full MCP/git results remain
-persisted under the turn artifacts instead of being dumped into model context.
+For PreToolUse awareness, the runtime emits bounded raw
+`hookSpecificOutput.additionalContext` using a stable
+`cuerail.agentFeedback.raw.v1` envelope. Full MCP/git results remain persisted
+under the turn artifacts; stdout feedback is truncated to the configured budget
+and recorded in `agentFeed`.
 
 ## Turn artifact
 
