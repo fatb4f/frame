@@ -2,49 +2,45 @@ package cuerail
 
 // Root Cuerail manifest.
 //
-// Keep this file simple. It names what Cuerail is, what it watches, and the
-// small set of child manifests that describe each layer.
+// Keep this file simple.
+// It names what Cuerail is, what it watches, and the small set of
+// child manifests that describe each layer.
 
 cuerail: {
 	name: "cuerail"
+
 	kind: "hook based agent sidecar"
-	for:  "codex"
+
+	for: "codex"
+
+	plain: "Cuerail renders Codex hook activity as simple CUE manifests."
 
 	branches: {
 		skill: {
-			name: "cuerail skill"
-			role: "agent recovery guidance"
+			name:  "cuerail skill"
+			plain: "Agent guidance for MCP bound git and rg."
 			bound_to: [
 				"git MCP",
 				"rg MCP",
 			]
-			not: [
-				"shell git",
-				"shell rg",
-				"workflow brain",
-			]
 		}
 
 		hooks: {
-			name: "hook sidecar"
-			role: "manifest generating hook phase loop"
+			name:  "hook sidecar"
+			plain: "Manifest generating hook phase loop."
 			bound_to: [
 				"Codex hooks",
 				"git MCP",
 				"rg MCP",
 			]
-			not: [
-				"agent planning",
-				"review framework",
-			]
 		}
 
 		observation: {
-			name: "observation"
-			role: "separate hook-collected evidence from ad hoc MCP evidence"
+			name:  "observation"
+			plain: "Post tool evidence gathering and MCP call origin tracking."
 			tracks: [
-				"which MCP calls came from hooks",
-				"which MCP calls came from agent fallback",
+				"hook MCP calls",
+				"ad hoc MCP calls",
 			]
 		}
 	}

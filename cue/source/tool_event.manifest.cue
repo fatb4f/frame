@@ -8,6 +8,6 @@ tool_event: {
 
 	kinds: [
 		"hook MCP call",
-		"agent fallback MCP call",
+		"ad hoc MCP call",
 	]
 }
