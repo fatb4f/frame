@@ -204,13 +204,14 @@ CUERAIL_CACHE="$doctor_fixture_state/cache" CUERAIL_GIT_MCP_GO_DRY_RUN=1 \
 jq -e . "$output_json" >/dev/null
 
 jq -e --slurpfile adapter "$adapter_json" '
-  .argv[0] == "git-mcp-go" and
-  .argv[1] == "serve" and
-  .argv[2] == "--mode" and
-  .argv[3] == $adapter[0].mode and
-  .argv[4] == ("--auto-approve=" + $adapter[0].autoApprove) and
-  (.argv | map(select(startswith("-r="))) | length) == 1 and
-  (.argv | map(select(startswith("-r=")))[0] | sub("^-r="; "") | split(",")) == $adapter[0].repoRoots
+  .argv == [
+    "git-mcp-go",
+    "serve",
+    "--mode",
+    $adapter[0].mode,
+    ("--auto-approve=" + $adapter[0].autoApprove),
+    ("-r=" + ($adapter[0].repoRoots | join(",")))
+  ]
 ' "$output_json" >/dev/null ||
   die "git-mcp-go wrapper dry-run does not match adapter artifact"
 

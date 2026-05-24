@@ -36,8 +36,8 @@ need jq
 
 mode=$(jq -er '.mode | select(. == "shell")' "$config") ||
   die "unsupported mode in adapter artifact"
-auto_approve=$(jq -er '.autoApprove | select(type == "string" and length > 0)' "$config") ||
-  die "missing autoApprove in adapter artifact"
+auto_approve=$(jq -er '.autoApprove | select(. == "allow-read-only")' "$config") ||
+  die "unsupported autoApprove in adapter artifact"
 repo_arg=$(jq -er '.repoRoots | select(type == "array" and length > 0 and all(.[]; type == "string" and length > 0)) | join(",")' "$config") ||
   die "missing repoRoots in adapter artifact"
 
