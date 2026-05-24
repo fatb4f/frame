@@ -48,47 +48,61 @@ _hookInput: hookInput
 #SessionStartHookManifest: {
 	input: hooks.#SessionStartCommandInput & _hookInput
 	output: hooks.#SessionStartCommandOutput
-	capture: {
-		persist: false
+	capture: #CaptureDecision & {
+		persist:   false
+		eventSlug: "session-start"
+		fileStem:  eventSlug
 	}
 }
 
 #UserPromptSubmitHookManifest: {
 	input: hooks.#UserPromptSubmitCommandInput & _hookInput
 	output: hooks.#UserPromptSubmitCommandOutput
-	capture: {
-		persist: true
+	capture: #CaptureDecision & {
+		persist:   true
+		eventSlug: "user-prompt-submit"
+		fileStem:  eventSlug
 	}
 }
 
 #PreToolUseHookManifest: {
 	input: hooks.#PreToolUseCommandInput & _hookInput
 	output: hooks.#PreToolUseCommandOutput
-	capture: {
-		persist: false
+	capture: #CaptureDecision & {
+		persist:   false
+		eventSlug: "pre-tool-use"
+		fileStem:  eventSlug
 	}
 }
 
 #PermissionRequestHookManifest: {
 	input: hooks.#PermissionRequestCommandInput & _hookInput
 	output: hooks.#PermissionRequestCommandOutput
-	capture: {
-		persist: false
+	capture: #CaptureDecision & {
+		persist:   false
+		eventSlug: "permission-request"
+		fileStem:  eventSlug
 	}
 }
 
 #PostToolUseHookManifest: {
 	input: hooks.#PostToolUseCommandInput & _hookInput
 	output: hooks.#PostToolUseCommandOutput
-	capture: {
+	capture: #CaptureDecision & {
+		eventSlug: "post-tool-use"
 		if input.tool_name == "mcp-ripgrep" {
-			persist: true
+			persist:  true
+			toolSlug: "mcp-ripgrep"
+			fileStem: "\(eventSlug).\(toolSlug)"
 		}
 		if input.tool_name == "git-mcp-server" {
-			persist: true
+			persist:  true
+			toolSlug: "git-mcp-server"
+			fileStem: "\(eventSlug).\(toolSlug)"
 		}
 		if input.tool_name != "mcp-ripgrep" && input.tool_name != "git-mcp-server" {
 			persist: false
+			fileStem: eventSlug
 		}
 	}
 }
@@ -96,39 +110,49 @@ _hookInput: hookInput
 #PreCompactHookManifest: {
 	input: hooks.#PreCompactCommandInput & _hookInput
 	output: hooks.#PreCompactCommandOutput
-	capture: {
-		persist: false
+	capture: #CaptureDecision & {
+		persist:   false
+		eventSlug: "pre-compact"
+		fileStem:  eventSlug
 	}
 }
 
 #PostCompactHookManifest: {
 	input: hooks.#PostCompactCommandInput & _hookInput
 	output: hooks.#PostCompactCommandOutput
-	capture: {
-		persist: false
+	capture: #CaptureDecision & {
+		persist:   false
+		eventSlug: "post-compact"
+		fileStem:  eventSlug
 	}
 }
 
 #SubagentStartHookManifest: {
 	input: hooks.#SubagentStartCommandInput & _hookInput
 	output: hooks.#SubagentStartCommandOutput
-	capture: {
-		persist: false
+	capture: #CaptureDecision & {
+		persist:   false
+		eventSlug: "subagent-start"
+		fileStem:  eventSlug
 	}
 }
 
 #SubagentStopHookManifest: {
 	input: hooks.#SubagentStopCommandInput & _hookInput
 	output: hooks.#SubagentStopCommandOutput
-	capture: {
-		persist: false
+	capture: #CaptureDecision & {
+		persist:   false
+		eventSlug: "subagent-stop"
+		fileStem:  eventSlug
 	}
 }
 
 #StopHookManifest: {
 	input: hooks.#StopCommandInput & _hookInput
 	output: hooks.#StopCommandOutput
-	capture: {
-		persist: true
+	capture: #CaptureDecision & {
+		persist:   true
+		eventSlug: "stop"
+		fileStem:  eventSlug
 	}
 }

@@ -1,0 +1,124 @@
+#!/usr/bin/env sh
+set -eu
+
+die() {
+  printf 'frame-codex-hook: %s\n' "$1" >&2
+  exit 1
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+cleanup_temp_files() {
+  [ -n "${input_json:-}" ] && rm -f "$input_json"
+  [ -n "${wrapped_json:-}" ] && rm -f "$wrapped_json"
+  [ -n "${output_json:-}" ] && rm -f "$output_json"
+  [ -n "${persist_json:-}" ] && rm -f "$persist_json"
+  [ -n "${file_stem_json:-}" ] && rm -f "$file_stem_json"
+  [ -n "${manifest_cue:-}" ] && rm -f "$manifest_cue"
+  return 0
+}
+
+safe_component() {
+  printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_'
+}
+
+resolve_source_home() {
+  case "$0" in
+    */*) script_dir=${0%/*} ;;
+    *)
+      script_path=$(command -v "$0") || die "cannot locate script"
+      script_dir=${script_path%/*}
+      ;;
+  esac
+
+  cd "$script_dir/.." 2>/dev/null && pwd -P
+}
+
+: "${CODEX_STATE:?CODEX_STATE is required}"
+FRAME_HOME="${FRAME_HOME:-$(resolve_source_home)}"
+FRAME_TURNS="${FRAME_TURNS:-$CODEX_STATE/frame/turns}"
+export CODEX_STATE FRAME_HOME FRAME_TURNS
+
+need cue
+need flock
+need jq
+need mkdir
+need mktemp
+need mv
+need rm
+need sed
+need tr
+
+input_json=$(mktemp "${TMPDIR:-/tmp}/frame-codex-hook.XXXXXX.json")
+wrapped_json=$(mktemp "${TMPDIR:-/tmp}/frame-codex-hook-wrapped.XXXXXX.json")
+output_json=$(mktemp "${TMPDIR:-/tmp}/frame-codex-hook-output.XXXXXX.json")
+persist_json=$(mktemp "${TMPDIR:-/tmp}/frame-codex-hook-persist.XXXXXX.json")
+file_stem_json=$(mktemp "${TMPDIR:-/tmp}/frame-codex-hook-file-stem.XXXXXX.json")
+manifest_cue=
+trap cleanup_temp_files EXIT HUP INT TERM
+
+cat >"$input_json"
+jq -c '{hookInput: .}' "$input_json" >"$wrapped_json" || die "invalid hook JSON"
+
+(
+  cd "$FRAME_HOME"
+  cue export ./cue/runtime "$wrapped_json" -e '#HookManifest.output' >"$output_json"
+  cue export ./cue/runtime "$wrapped_json" -e '#HookManifest.capture.persist' >"$persist_json"
+)
+
+persist=$(jq -r 'if . == true then "true" else "false" end' "$persist_json") ||
+  die "invalid capture persist output"
+
+if [ "$persist" = "true" ]; then
+  session_id=$(jq -r '.session_id // empty' "$input_json") || die "invalid hook JSON"
+  turn_id=$(jq -r '.turn_id // empty' "$input_json") || die "invalid hook JSON"
+
+  [ -n "$session_id" ] || die "persisted hook missing session_id"
+  [ -n "$turn_id" ] || die "persisted hook missing turn_id"
+
+  (
+    cd "$FRAME_HOME"
+    cue export ./cue/runtime "$wrapped_json" -e '#HookManifest.capture.fileStem' >"$file_stem_json"
+  )
+  file_stem=$(jq -r . "$file_stem_json") || die "invalid capture file stem"
+  [ -n "$file_stem" ] || die "empty capture file stem"
+
+  safe_session=$(safe_component "$session_id")
+  safe_turn=$(safe_component "$turn_id")
+  safe_stem=$(safe_component "$file_stem")
+  turn_dir="$FRAME_TURNS/$safe_session/$safe_turn"
+
+  mkdir -p "$turn_dir" || die "could not create turn directory"
+
+  (
+    flock -x 9 || die "could not lock turn directory"
+
+    next_seq=1
+    for existing_manifest in "$turn_dir"/[0-9][0-9][0-9][0-9][0-9][0-9]-*.cue; do
+      [ -e "$existing_manifest" ] || continue
+      base_name=${existing_manifest##*/}
+      seq_text=${base_name%%-*}
+      seq_value=$(printf '%s' "$seq_text" | sed 's/^0*//')
+      [ -n "$seq_value" ] || seq_value=0
+      [ "$seq_value" -lt "$next_seq" ] || next_seq=$((seq_value + 1))
+    done
+
+    seq_name=$(printf '%06d' "$next_seq")
+    manifest_cue=$(mktemp "$turn_dir/.tmp.XXXXXX.cue") ||
+      die "could not create temporary manifest"
+
+    (
+      cd "$FRAME_HOME"
+      cue export ./cue/runtime "$wrapped_json" -e '#HookManifest' --out cue >"$manifest_cue"
+      cue vet -c=false ./cue/runtime "$manifest_cue" -d '#HookManifest'
+    ) || die "could not export or validate hook manifest"
+
+    mv "$manifest_cue" "$turn_dir/$seq_name-$safe_stem.cue" ||
+      die "could not publish hook manifest"
+    manifest_cue=
+  ) 9>"$turn_dir/.lock"
+fi
+
+cat "$output_json"

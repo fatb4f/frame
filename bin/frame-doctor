@@ -1,0 +1,149 @@
+#!/usr/bin/env sh
+set -eu
+LC_ALL=C
+export LC_ALL
+
+die() {
+  printf 'frame-doctor: %s\n' "$1" >&2
+  exit 1
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+resolve_source_home() {
+  case "$0" in
+    */*) script_dir=${0%/*} ;;
+    *)
+      script_path=$(command -v "$0") || die "cannot locate script"
+      script_dir=${script_path%/*}
+      ;;
+  esac
+
+  cd "$script_dir/.." 2>/dev/null && pwd -P
+}
+
+cleanup_temp_files() {
+  [ -n "${doctor_state:-}" ] && rm -rf "$doctor_state"
+  [ -n "${output_json:-}" ] && rm -f "$output_json"
+  [ -n "${manifest_json:-}" ] && rm -f "$manifest_json"
+  return 0
+}
+
+run_fixture() {
+  fixture=$1
+
+  output_json=$(mktemp "${TMPDIR:-/tmp}/frame-doctor-output.XXXXXX.json")
+  CODEX_STATE="$doctor_state" FRAME_HOME="$FRAME_HOME" "$FRAME_HOME/bin/frame-codex-hook" \
+    <"$fixture" >"$output_json"
+  jq -e . "$output_json" >/dev/null
+  rm -f "$output_json"
+  output_json=
+}
+
+validate_manifest() {
+  manifest=$1
+
+  (
+    cd "$FRAME_HOME"
+    cue vet -c=false ./cue/runtime "$manifest" -d '#HookManifest'
+  ) || die "schema_invalid_manifest: $(basename "$manifest")"
+}
+
+assert_manifest_content() {
+  manifest=$1
+  expected_event=$2
+  expected_tool=$3
+
+  manifest_json=$(mktemp "${TMPDIR:-/tmp}/frame-doctor-manifest.XXXXXX.json")
+  (
+    cd "$FRAME_HOME"
+    cue export "$manifest" >"$manifest_json"
+  ) || die "could not export manifest: $(basename "$manifest")"
+
+  if [ -n "$expected_tool" ]; then
+    jq -e --arg event "$expected_event" --arg tool "$expected_tool" \
+      '.input.hook_event_name == $event and .input.tool_name == $tool and .capture.persist == true' \
+      "$manifest_json" >/dev/null ||
+      die "wrong_manifest_content: $(basename "$manifest")"
+  else
+    jq -e --arg event "$expected_event" \
+      '.input.hook_event_name == $event and .capture.persist == true' \
+      "$manifest_json" >/dev/null ||
+      die "wrong_manifest_content: $(basename "$manifest")"
+  fi
+
+  rm -f "$manifest_json"
+  manifest_json=
+}
+
+FRAME_HOME="${FRAME_HOME:-$(resolve_source_home)}"
+
+need basename
+need cue
+need jq
+need mktemp
+need rm
+
+[ -x "$FRAME_HOME/bin/frame-codex-hook" ] || die "missing executable bin/frame-codex-hook"
+
+trap cleanup_temp_files EXIT HUP INT TERM
+
+doctor_state=$(mktemp -d "${TMPDIR:-/tmp}/frame-doctor-state.XXXXXX")
+
+(
+  cd "$FRAME_HOME"
+  cue vet -c=false ./cue/runtime
+  cue export ./cue/runtime -e '#ExampleUserPromptSubmitManifest' >/dev/null
+  cue export ./cue/runtime -e '#ExamplePostToolUseRipgrepManifest' >/dev/null
+  cue export ./cue/runtime -e '#ExamplePostToolUseGitManifest' >/dev/null
+  cue export ./cue/runtime -e '#ExampleUncapturedPostToolUseManifest' >/dev/null
+  cue export ./cue/runtime -e '#ExampleStopManifest' >/dev/null
+  cue export ./cue/runtime -e '#ExampleTurnTrace' >/dev/null
+)
+
+run_fixture "$FRAME_HOME/test/fixtures/hooks/user-prompt-submit.json"
+run_fixture "$FRAME_HOME/test/fixtures/hooks/post-tool-use.mcp-ripgrep.json"
+run_fixture "$FRAME_HOME/test/fixtures/hooks/post-tool-use.git-mcp-server.json"
+run_fixture "$FRAME_HOME/test/fixtures/hooks/post-tool-use.unrelated.json"
+run_fixture "$FRAME_HOME/test/fixtures/hooks/stop.json"
+
+turn_dir="$doctor_state/frame/turns/session-example/turn-example"
+[ -d "$turn_dir" ] || die "missing turn manifest directory"
+
+expected_filenames='000001-user-prompt-submit.cue
+000002-post-tool-use.mcp-ripgrep.cue
+000003-post-tool-use.git-mcp-server.cue
+000004-stop.cue'
+
+actual_filenames=
+manifest_count=0
+for manifest in "$turn_dir"/*.cue; do
+  [ -f "$manifest" ] || continue
+  base_name=${manifest##*/}
+  manifest_count=$((manifest_count + 1))
+  if [ -n "$actual_filenames" ]; then
+    actual_filenames="${actual_filenames}
+${base_name}"
+  else
+    actual_filenames=$base_name
+  fi
+  validate_manifest "$manifest"
+done
+
+[ "$manifest_count" -eq 4 ] ||
+  die "wrong persisted manifest count: got $manifest_count expected 4"
+
+[ "$actual_filenames" = "$expected_filenames" ] ||
+  die "wrong filename set: $(printf '%s' "$actual_filenames" | tr '\n' ' ')"
+
+[ ! -e "$turn_dir/000004-post-tool-use.cue" ] ||
+  die "unrelated PostToolUse persisted"
+
+assert_manifest_content "$turn_dir/000001-user-prompt-submit.cue" "UserPromptSubmit" ""
+assert_manifest_content "$turn_dir/000002-post-tool-use.mcp-ripgrep.cue" "PostToolUse" "mcp-ripgrep"
+assert_manifest_content "$turn_dir/000003-post-tool-use.git-mcp-server.cue" "PostToolUse" "git-mcp-server"
+assert_manifest_content "$turn_dir/000004-stop.cue" "Stop" ""
+
+printf 'frame-doctor: hook runtime nucleus ok\n'
