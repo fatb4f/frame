@@ -51,9 +51,16 @@ package cuerail
 		source:    null | #ReviewTokenUsageSource
 	}
 
-	mcpEvidence: {
+	readSources: {
 		git: #ReviewEvidenceSurface
 		rg:  #ReviewEvidenceSurface
+	}
+
+	hookFrames: {
+		sessionStart: #SessionStartHookFrame
+		preToolUse:   #PreToolUseHookFrame
+		postToolUse:  #PostToolUseHookFrame
+		stop:         #StopHookFrame
 	}
 
 	notes: [...string]

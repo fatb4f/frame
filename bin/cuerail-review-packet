@@ -118,6 +118,15 @@ commit_sha=$(git -C "$CUERAIL_HOME" rev-parse --verify "$commit^{commit}") ||
   die "unknown commit: $commit"
 parent_sha=$(git -C "$CUERAIL_HOME" rev-parse --verify "$commit_sha^" 2>/dev/null || true)
 subject=$(git -C "$CUERAIL_HOME" show -s --format=%s "$commit_sha")
+repo_root=$(git -C "$CUERAIL_HOME" rev-parse --show-toplevel)
+repo_name=${repo_root##*/}
+repo_branch=$(git -C "$CUERAIL_HOME" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+repo_head=$(git -C "$CUERAIL_HOME" rev-parse --short HEAD)
+if [ -n "$(git -C "$CUERAIL_HOME" status --porcelain)" ]; then
+  repo_dirty=true
+else
+  repo_dirty=false
+fi
 
 changed_files_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-files.XXXXXX.json")
 line_stats_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-stats.XXXXXX.json")
@@ -202,6 +211,11 @@ jq -n \
   --arg commit "$commit_sha" \
   --arg parent "$parent_sha" \
   --arg subject "$subject" \
+  --arg repoRoot "$repo_root" \
+  --arg repoName "$repo_name" \
+  --arg repoBranch "$repo_branch" \
+  --arg repoHead "$repo_head" \
+  --arg repoDirty "$repo_dirty" \
   --slurpfile changedFiles "$changed_files_json" \
   --slurpfile lineStats "$line_stats_json" \
   --arg sourceDoctor "$source_doctor_status" \
@@ -215,7 +229,31 @@ jq -n \
   --slurpfile gitEvidence "$git_evidence_json" \
   --slurpfile rgEvidence "$rg_evidence_json" \
   --slurpfile notes "$notes_json" \
-  '{
+  '
+  def source_kind($adapter):
+    if ($adapter | startswith("repo-")) then "fallback"
+    elif ($adapter | contains("mcp")) then "mcp"
+    else "ad_hoc"
+    end;
+  def sources($surface):
+    [($surface.files // [])[] | {
+      kind: source_kind(.adapter),
+      tool: .adapter,
+      readOnly: true,
+      adapter: .adapter
+    }] | unique_by(.kind, .tool, .adapter);
+  def projection($surface):
+    if $surface.state == "red" then "red"
+    elif (($surface.files // []) | length) > 0 then "green"
+    else "yellow"
+    end;
+  def repo_frame: {
+    root: $repoRoot,
+    name: $repoName,
+    head: $repoHead,
+    dirty: ($repoDirty == "true")
+  } + (if $repoBranch == "" then {} else {branch: $repoBranch} end);
+  {
     commit: $commit,
     parent: (if $parent == "" then null else $parent end),
     subject: $subject,
@@ -241,9 +279,81 @@ jq -n \
       path: (if $tokenUsagePath == "" then null else $tokenUsagePath end),
       source: (if $tokenUsageSource == "" then null else $tokenUsageSource end)
     },
-    mcpEvidence: {
+    readSources: {
       git: $gitEvidence[0],
       rg: $rgEvidence[0]
+    },
+    hookFrames: {
+      sessionStart: {
+        schema: "cuerail.hook.session-start.v1",
+        phase: "session_start",
+        repo: repo_frame,
+        context: {
+          relevantFiles: $changedFiles[0],
+          activeSchemas: (if any($changedFiles[0][]; startswith("cue/runtime/")) then ["cue/runtime"] else [] end)
+        },
+        provenance: [],
+        status: {
+          captureValidity: $gitEvidence[0].state,
+          projectionValidity: projection($gitEvidence[0]),
+          sources: sources($gitEvidence[0])
+        }
+      },
+      preToolUse: {
+        schema: "cuerail.hook.pre-tool-use.v1",
+        phase: "pre_tool_use",
+        repo: repo_frame,
+        tool: {name: "review-packet"},
+        risk: {
+          class: (if any($changedFiles[0][]; startswith("bin/")) then "execute" elif any($changedFiles[0][]; startswith("cue/")) then "write" else "unknown" end),
+          touchedPaths: $changedFiles[0],
+          policySnippets: []
+        },
+        provenance: [],
+        status: {
+          captureValidity: (if $rgEvidence[0].state == "red" then $gitEvidence[0].state else $rgEvidence[0].state end),
+          projectionValidity: (if projection($rgEvidence[0]) == "red" then projection($gitEvidence[0]) else projection($rgEvidence[0]) end),
+          sources: (sources($gitEvidence[0]) + sources($rgEvidence[0]) | unique_by(.kind, .tool, .adapter))
+        }
+      },
+      postToolUse: {
+        schema: "cuerail.hook.post-tool-use.v1",
+        phase: "post_tool_use",
+        repo: repo_frame,
+        tool: {name: "review-packet"},
+        delta: {
+          changedPaths: $changedFiles[0],
+          generatedArtifacts: [],
+          newEvidence: []
+        },
+        provenance: [],
+        status: {
+          captureValidity: $gitEvidence[0].state,
+          projectionValidity: projection($gitEvidence[0]),
+          sources: sources($gitEvidence[0])
+        }
+      },
+      stop: {
+        schema: "cuerail.hook.stop.v1",
+        phase: "stop",
+        repo: repo_frame,
+        summary: {
+          unresolvedChanges: $changedFiles[0],
+          generatedArtifacts: [],
+          validationResults: [
+            {name: "sourceDoctor", status: (if $sourceDoctor == "ok" then "green" elif $sourceDoctor == "failed" then "red" else "unknown" end)},
+            {name: "cueVet", status: (if $cueVet == "ok" then "green" elif $cueVet == "failed" then "red" else "unknown" end)},
+            {name: "schemaSync", status: (if $schemaSync == "ok" then "green" elif $schemaSync == "failed" then "red" else "unknown" end)},
+            {name: "runtimeDoctor", status: (if $runtimeDoctor == "ok" then "green" elif $runtimeDoctor == "failed" then "red" else "unknown" end)}
+          ]
+        },
+        provenance: [],
+        status: {
+          captureValidity: $gitEvidence[0].state,
+          projectionValidity: projection($gitEvidence[0]),
+          sources: sources($gitEvidence[0])
+        }
+      }
     },
     notes: $notes[0]
   }'

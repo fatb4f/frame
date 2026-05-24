@@ -499,16 +499,26 @@ jq -e . "$review_packet_json" >/dev/null
 (
   cd "$CUERAIL_HOME"
   cue vet -c=false ./cue/runtime "$review_packet_json" -d '#ReviewPacket'
-) || die "invalid review packet output with mcp evidence"
+) || die "invalid review packet output with hook frames"
 jq -e '
-  .mcpEvidence.git.state == "yellow" and
-  (.mcpEvidence.git.files | length) == 3 and
-  all(.mcpEvidence.git.files[]; .adapter == "repo-git" and .readiness == "yellow") and
-  .mcpEvidence.rg.state == "yellow" and
-  (.mcpEvidence.rg.files | length) == 1 and
-  all(.mcpEvidence.rg.files[]; .adapter == "repo-rg" and .readiness == "yellow")
+  .readSources.git.state == "yellow" and
+  (.readSources.git.files | length) == 3 and
+  all(.readSources.git.files[]; .adapter == "repo-git" and .readiness == "yellow") and
+  .readSources.rg.state == "yellow" and
+  (.readSources.rg.files | length) == 1 and
+  all(.readSources.rg.files[]; .adapter == "repo-rg" and .readiness == "yellow") and
+  .hookFrames.sessionStart.phase == "session_start" and
+  .hookFrames.sessionStart.status.projectionValidity == "green" and
+  any(.hookFrames.sessionStart.status.sources[]; .kind == "fallback" and .tool == "repo-git" and .readOnly == true) and
+  .hookFrames.preToolUse.phase == "pre_tool_use" and
+  .hookFrames.preToolUse.status.projectionValidity == "green" and
+  any(.hookFrames.preToolUse.status.sources[]; .kind == "fallback" and .tool == "repo-rg" and .readOnly == true) and
+  .hookFrames.postToolUse.phase == "post_tool_use" and
+  .hookFrames.postToolUse.status.projectionValidity == "green" and
+  .hookFrames.stop.phase == "stop" and
+  .hookFrames.stop.status.projectionValidity == "green"
 ' "$review_packet_json" >/dev/null ||
-  die "review packet did not consume generated fallback evidence"
+  die "review packet did not project fallback read sources into hook frames"
 rm -f "$review_packet_json"
 review_packet_json=
 
@@ -617,6 +627,10 @@ if [ "$mode" = "all" ]; then
   run_runtime_checks
 fi
 
-printf 'cuerail-doctor: git_mcp: yellow (fallback evidence valid; no live git-mcp-go capture payload checked)\n'
-printf 'cuerail-doctor: rg_mcp: yellow (fallback evidence valid; no live mcp-ripgrep capture payload checked)\n'
+printf 'cuerail-doctor: git_read_source: available via repo-git fallback\n'
+printf 'cuerail-doctor: rg_read_source: available via repo-rg fallback\n'
+printf 'cuerail-doctor: session_start_projection: green\n'
+printf 'cuerail-doctor: pre_tool_use_projection: green\n'
+printf 'cuerail-doctor: post_tool_use_projection: green\n'
+printf 'cuerail-doctor: stop_projection: green\n'
 printf 'cuerail-doctor: %s ok\n' "$mode"
