@@ -1,0 +1,14 @@
+{
+  "id": "smoke.rg.search",
+  "phase": "PreToolUse",
+  "kind": "rg",
+  "substrate": "mcp",
+  "tool": "mcp-ripgrep",
+  "op": "search",
+  "input": {
+    "path": "/home/_404/.local/share/codex/tools/cuerail",
+    "pattern": "ReadResultEnvelope",
+    "maxResults": 1
+  },
+  "readOnly": true
+}

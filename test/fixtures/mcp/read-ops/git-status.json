@@ -1,0 +1,12 @@
+{
+  "id": "smoke.git.status",
+  "phase": "Stop",
+  "kind": "git",
+  "substrate": "mcp",
+  "tool": "git-mcp-server",
+  "op": "git_status",
+  "input": {
+    "repo_path": "/home/_404/.local/share/codex/tools/cuerail"
+  },
+  "readOnly": true
+}

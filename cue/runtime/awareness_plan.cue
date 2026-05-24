@@ -45,6 +45,9 @@ _schemaAuthorityRepoRoot: manifest.repos.frame.root
 #MCPReadExecutor: {
 	env: "CUERAIL_MCP_READ_EXECUTOR"
 
+	timeoutMs:       int & >0 | *3000
+	protocolVersion: "2025-06-18"
+
 	request: #ReadOp
 
 	response: #ReadResultEnvelope
@@ -88,12 +91,11 @@ _schemaAuthorityRepoRoot: manifest.repos.frame.root
 		kind:      "rg"
 		substrate: "mcp"
 		tool:      "mcp-ripgrep"
-		op:        "advanced-search"
+		op:        "search"
 		input: {
-			pattern:      "skills/rg/SKILL.md"
-			path:         "$CODEX_HOME"
-			fixedStrings: true
-			maxResults:   20
+			pattern:    "^name: rg$"
+			path:       "/home/_404/.local/share/codex/tools/cuerail/codex/skills/rg/SKILL.md"
+			maxResults: 20
 		}
 		readOnly: true
 	}]
