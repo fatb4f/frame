@@ -1,15 +1,17 @@
 package cuerail
 
-#GitRepoName:         =~"^[A-Za-z0-9._-]+$"
-#GitRepoRoot:         =~"^/.*[^/]$"
-#GitObjectID:         =~"^[0-9a-f]{7,64}$"
-#GitCaptureTimestamp: =~"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
-#GitRepoDiffScope:    "unstaged" | "staged"
+#GitRepoName:            =~"^[A-Za-z0-9._-]+$"
+#GitRepoRoot:            =~"^/.*[^/]$"
+#GitObjectID:            =~"^[0-9a-f]{7,64}$"
+#GitCaptureTimestamp:    =~"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+#GitRepoCaptureKind:     "status" | "diff-unstaged" | "diff-staged" | "log"
+#GitRepoDiffCaptureKind: "diff-unstaged" | "diff-staged"
+#GitRepoDiffScope:       "unstaged" | "staged"
 
 #GitRepoCaptureBase: {
 	schema:     "cuerail.git-mcp-go.capture.v1"
 	adapter:    "git-mcp-go"
-	kind:       "status" | "diff-unstaged" | "diff-staged" | "log"
+	kind:       #GitRepoCaptureKind
 	capturedAt: #GitCaptureTimestamp
 	repo: {
 		name: #GitRepoName
@@ -40,7 +42,7 @@ package cuerail
 }
 
 #GitRepoDiffCapture: #GitRepoCaptureBase & {
-	kind: "diff-\(payload.scope)"
+	kind: #GitRepoDiffCaptureKind & "diff-\(payload.scope)"
 	payload: {
 		scope: #GitRepoDiffScope
 		patch: string
@@ -81,7 +83,7 @@ package cuerail
 	}
 }
 
-#ExampleGitRepoDiffCapture: #GitRepoDiffCapture & {
+#ExampleGitRepoUnstagedDiffCapture: #GitRepoDiffCapture & {
 	capturedAt: "2026-05-23T20:00:00Z"
 	repo: {
 		name: "frame"
@@ -89,6 +91,24 @@ package cuerail
 	}
 	payload: {
 		scope: "unstaged"
+		patch: ""
+		stat: {
+			files:      0
+			insertions: 0
+			deletions:  0
+		}
+		paths: []
+	}
+}
+
+#ExampleGitRepoStagedDiffCapture: #GitRepoDiffCapture & {
+	capturedAt: "2026-05-23T20:00:00Z"
+	repo: {
+		name: "frame"
+		root: "/home/_404/src/frame"
+	}
+	payload: {
+		scope: "staged"
 		patch: ""
 		stat: {
 			files:      0

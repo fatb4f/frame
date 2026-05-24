@@ -1,0 +1,29 @@
+{
+  "schema": "cuerail.git-mcp-go.capture.v1",
+  "adapter": "git-mcp-go",
+  "capturedAt": "2026-05-23T20:00:00Z",
+  "repo": {
+    "name": "bashly",
+    "root": "/home/_404/.local/share/src/bashly.sh"
+  },
+  "source": {
+    "tool": "git-mcp-go",
+    "mode": "shell",
+    "autoApprove": "allow-read-only"
+  },
+  "evidence": {
+    "cacheRel": "mcp/git-mcp-go/evidence/repos/bashly/log.json"
+  },
+  "kind": "log",
+  "payload": {
+    "commits": [
+      {
+        "commit": "8568c54",
+        "parents": ["e0b3de6"],
+        "author": "Cuerail",
+        "date": "2026-05-23T19:59:00Z",
+        "subject": "chore: define git capture evidence"
+      }
+    ]
+  }
+}

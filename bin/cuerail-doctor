@@ -97,6 +97,9 @@ cleanup_temp_files() {
   [ -n "${fixture_wrap_json:-}" ] && rm -f "$fixture_wrap_json"
   [ -n "${fixture_persist_json:-}" ] && rm -f "$fixture_persist_json"
   [ -n "${mcp_adapter_json:-}" ] && rm -f "$mcp_adapter_json"
+  [ -n "${expected_git_fixtures_json:-}" ] && rm -f "$expected_git_fixtures_json"
+  [ -n "${expected_git_fixture_paths:-}" ] && rm -f "$expected_git_fixture_paths"
+  [ -n "${actual_git_fixture_paths:-}" ] && rm -f "$actual_git_fixture_paths"
   [ -n "${manifest_json:-}" ] && rm -f "$manifest_json"
   [ -n "${doctor_fixture_state:-}" ] && rm -rf "$doctor_fixture_state"
   return 0
@@ -191,6 +194,8 @@ CUERAIL_HOME="${CUERAIL_HOME:-$(resolve_source_home)}"
 [ -d "$CUERAIL_HOME/cue" ] || die "missing active CUE package"
 
 need cue
+need cmp
+need find
 need jq
 need mktemp
 need flock
@@ -198,6 +203,7 @@ need mkdir
 need mv
 need rm
 need sed
+need sort
 need tr
 
 trap cleanup_temp_files EXIT HUP INT TERM
@@ -226,7 +232,8 @@ expected_persisted_count=0
   cue export ./cue/runtime -e '#ExamplePostToolUseHookOutput' >/dev/null
   cue export ./cue/runtime -e '#ExampleStopHookOutput' >/dev/null
   cue export ./cue/runtime -e '#ExampleGitRepoStatusCapture' >/dev/null
-  cue export ./cue/runtime -e '#ExampleGitRepoDiffCapture' >/dev/null
+  cue export ./cue/runtime -e '#ExampleGitRepoUnstagedDiffCapture' >/dev/null
+  cue export ./cue/runtime -e '#ExampleGitRepoStagedDiffCapture' >/dev/null
   cue export ./cue/runtime -e '#ExampleGitRepoLogCapture' >/dev/null
 )
 
@@ -299,13 +306,40 @@ jq -e --slurpfile adapter "$adapter_json" '
 rm -f "$output_json"
 output_json=
 
+expected_git_fixtures_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-expected-git-fixtures.XXXXXX.json")
+expected_git_fixture_paths=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-expected-git-fixture-paths.XXXXXX")
+actual_git_fixture_paths=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-actual-git-fixture-paths.XXXXXX")
+(
+  cd "$CUERAIL_HOME"
+  cue export ./cue/adapters -e '#ExpectedGitMCPGoEvidenceFixtures' --out json
+) >"$expected_git_fixtures_json"
+jq -r '.[].path' "$expected_git_fixtures_json" | sort >"$expected_git_fixture_paths"
+find "$CUERAIL_HOME/test/fixtures/mcp/git-mcp-go/evidence/repos" -type f -name '*.json' |
+  sed "s|^$CUERAIL_HOME/||" |
+  sort >"$actual_git_fixture_paths"
+cmp -s "$expected_git_fixture_paths" "$actual_git_fixture_paths" ||
+  die "git-mcp-go evidence fixtures do not match CUE projection"
+
 for fixture in "$CUERAIL_HOME"/test/fixtures/mcp/git-mcp-go/evidence/repos/*/*.json; do
   [ -f "$fixture" ] || continue
+  rel_fixture=${fixture#"$CUERAIL_HOME"/}
   (
     cd "$CUERAIL_HOME"
     cue vet -c=false ./cue/runtime "$fixture" -d '#GitRepoCapture'
   ) || die "schema_invalid_git_repo_capture: $(basename "$fixture")"
+  jq -e --arg path "$rel_fixture" '
+    ($path | capture("^test/fixtures/mcp/git-mcp-go/evidence/repos/(?<repo>[^/]+)/(?<kind>[^/]+)\\.json$")) as $fixture |
+    .repo.name == $fixture.repo and
+    .kind == $fixture.kind and
+    .evidence.cacheRel == ("mcp/git-mcp-go/evidence/repos/" + $fixture.repo + "/" + $fixture.kind + ".json") and
+    (if (.kind | startswith("diff-")) then .kind == ("diff-" + .payload.scope) else true end)
+  ' "$fixture" >/dev/null ||
+    die "inconsistent_git_repo_capture_fixture: $rel_fixture"
 done
+rm -f "$expected_git_fixtures_json" "$expected_git_fixture_paths" "$actual_git_fixture_paths"
+expected_git_fixtures_json=
+expected_git_fixture_paths=
+actual_git_fixture_paths=
 
 for fixture in "$CUERAIL_HOME"/test/fixtures/hooks/*.json; do
   [ -f "$fixture" ] || continue

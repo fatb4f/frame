@@ -1,0 +1,25 @@
+{
+  "schema": "cuerail.git-mcp-go.capture.v1",
+  "adapter": "git-mcp-go",
+  "capturedAt": "2026-05-23T20:00:00Z",
+  "repo": {
+    "name": "bashly",
+    "root": "/home/_404/.local/share/src/bashly.sh"
+  },
+  "source": {
+    "tool": "git-mcp-go",
+    "mode": "shell",
+    "autoApprove": "allow-read-only"
+  },
+  "evidence": {
+    "cacheRel": "mcp/git-mcp-go/evidence/repos/bashly/status.json"
+  },
+  "kind": "status",
+  "payload": {
+    "head": "8568c54",
+    "branch": "main",
+    "clean": true,
+    "changed": [],
+    "untracked": []
+  }
+}
