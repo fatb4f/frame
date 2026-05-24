@@ -70,6 +70,10 @@ cuerail: {
 			name: "hook_execution_manifest"
 			file: "cue/source/hook_execution_manifest.manifest.cue"
 		},
+		{
+			name: "repo_layout"
+			file: "cue/source/repo_layout.manifest.cue"
+		},
 	]
 
 	flow: [
