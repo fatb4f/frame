@@ -4,10 +4,11 @@ package agents
 	id: "cuerail-agent-contract"
 
 	purpose: """
-		Define repo-local agent and project constraints as CUE-owned policy.
-		Markdown may point to this contract, but must not duplicate it as authority.
-		This contract preserves the current MCP-first Cuerail repo contract without
-		changing runtime, hook, adapter, or MCP behavior.
+		Migration artifact for the former repo-local AGENTS.md contract.
+		Active agent-facing Cuerail policy has moved to
+		$CODEX_HOME/skills/cuerail/SKILL.md and Codex hook/config wiring.
+		This package remains only to validate and unwind historical projections
+		without changing runtime, hook, adapter, or MCP behavior.
 		"""
 
 	surfaces: {
@@ -15,13 +16,11 @@ package agents
 			{
 				id:      "cuerail-command-surface"
 				status:  "active"
-				purpose: "Current Cuerail hook, validation, and fallback adapter command surface."
+				purpose: "Current Cuerail hook, validation, and MCP wrapper command surface."
 				paths: [
 					"bin/cuerail-hook",
 					"bin/cuerail-doctor",
 					"bin/cuerail-schema-sync",
-					"bin/repo-git",
-					"bin/repo-rg",
 				]
 			},
 			{
@@ -40,38 +39,19 @@ package agents
 		preferred: [
 			{
 				id:      "git-mcp-server"
-				status:  "preferred"
-				purpose: "Preferred live git surface for agent-visible repository observations and user-requested staging or commits."
+				status:  "active"
+				purpose: "Only live git surface for agent-visible repository observations and user-requested staging or commits."
 				commands: ["git-mcp-server"]
 			},
 			{
 				id:      "mcp-ripgrep"
-				status:  "preferred"
-				purpose: "Preferred live bounded search surface for agent-visible repository observations."
+				status:  "active"
+				purpose: "Only live bounded search surface for agent-visible repository observations."
 				commands: ["mcp-ripgrep"]
 			},
 		]
 
-		fallback: [
-			{
-				id:      "repo-git"
-				status:  "fallback"
-				purpose: "Temporary worktree-local fallback adapter for bounded git observations."
-				commands: ["bin/repo-git"]
-				notes: [
-					"Lifecycle and replacement mapping are projected from #FallbackAdapterFacts.",
-				]
-			},
-			{
-				id:      "repo-rg"
-				status:  "fallback"
-				purpose: "Temporary worktree-local fallback adapter for bounded ripgrep observations."
-				commands: ["bin/repo-rg"]
-				notes: [
-					"Lifecycle and replacement mapping are projected from #FallbackAdapterFacts.",
-				]
-			},
-		]
+		fallback: []
 
 		legacy: [
 			{
@@ -118,10 +98,11 @@ package agents
 				"capture policy",
 				"projections",
 				"examples",
-				"agent constraints",
-				"project constraints",
 			]
 			mustNotOwn: [
+				"active agent policy",
+				"agent constraints",
+				"project constraints",
 				"filesystem locking mechanics",
 				"atomic rename mechanics",
 				"process execution mechanics",
@@ -148,7 +129,7 @@ package agents
 		{
 			owner: "markdown"
 			owns: [
-				"human/bootstrap pointer to CUE contracts",
+				"human/bootstrap pointer to Codex config and the Cuerail skill",
 			]
 			mustNotOwn: [
 				"agent policy",
@@ -162,8 +143,6 @@ package agents
 	observation: {
 		priority: [
 			"configured-mcp-server",
-			"repo-local-fallback-adapter",
-			"direct-shell-only-if-adapter-missing",
 		]
 
 		mcp: {
@@ -188,29 +167,21 @@ package agents
 		}
 
 		fallbackAdapters: {
-			useOnlyWhen: [
-				"MCP server unavailable",
-				"MCP server denies repository path",
-				"MCP server does not expose required observation",
-				"bootstrapping MCP itself",
-				"validation path explicitly targets fallback adapters",
-			]
-			commands: ["bin/repo-git", "bin/repo-rg"]
+			useOnlyWhen: []
+			commands: []
 		}
 
 		directShell: {
-			useOnlyWhen: [
-				"MCP unavailable and repo-local adapter does not expose required observation",
-			]
+			useOnlyWhen: []
 		}
 
 		constraints: [
 			{
-				id:       "observation-mcp-first"
-				title:    "Prefer configured MCP observations"
+				id:       "observation-mcp-only"
+				title:    "Use MCP for git and search observations"
 				severity: "required"
 				appliesTo: ["repo-aware work", "repository observations"]
-				statement: "Use git-mcp-server and mcp-ripgrep directly when Codex can see them in the active project/profile."
+				statement: "Use git-mcp-server and mcp-ripgrep for git and search observations. Do not use shell git, shell rg, repo-git, or repo-rg as observation surfaces."
 			},
 			{
 				id:       "mcp-raw-json-preservation"
@@ -227,25 +198,25 @@ package agents
 				statement: "Do not parse ripgrep results into path/line/text fields, parse git results into branch/head/dirty fields, compact diff/log/status output, or add projection layers before raw MCP evidence capture."
 			},
 			{
-				id:       "fallback-only"
-				title:    "Fallback adapters are fallback-only"
-				severity: "required"
+				id:       "no-shell-fallback-observation"
+				title:    "No shell fallback for git or search"
+				severity: "forbidden"
 				appliesTo: ["repo-git", "repo-rg", "repository observations"]
-				statement: "Use repo-git and repo-rg only when configured MCP observation is unavailable, denied, insufficient, being bootstrapped, or explicitly targeted by validation."
+				statement: "Do not use repo-git or repo-rg for agent repository observation. If MCP is unavailable or insufficient, report the blocker instead of falling back to shell."
 			},
 			{
 				id:       "repo-git-not-argv-passthrough"
 				title:    "repo-git is not git argv passthrough"
-				severity: "required"
+				severity: "forbidden"
 				appliesTo: ["repo-git"]
-				statement: "repo-git exposes bounded repository observations and must not become an arbitrary git argv passthrough."
+				statement: "repo-git must not be used as an agent repository observation surface."
 			},
 			{
 				id:       "repo-rg-bounded-search"
 				title:    "repo-rg is bounded search only"
-				severity: "required"
+				severity: "forbidden"
 				appliesTo: ["repo-rg"]
-				statement: "repo-rg exposes bounded repository search observations and must not become unbounded filesystem search."
+				statement: "repo-rg must not be used as an agent repository observation surface."
 			},
 			{
 				id:       "adapter-facts-projected-not-duplicated"
@@ -300,7 +271,7 @@ package agents
 				title:    "Use MCP for staging and commits"
 				severity: "required"
 				appliesTo: ["staging", "committing", "git workflow"]
-				statement: "Use git-mcp-server for staging and committing when it is available, especially when local .git metadata is read-only or sandboxed."
+				statement: "Use git-mcp-server for staging and committing. Do not use shell git."
 			},
 			{
 				id:       "git-workflow-status-before-commit"
@@ -340,51 +311,22 @@ package agents
 				run:     "codex mcp get git-mcp-server --json || true"
 				purpose: "Inspect git-mcp-server availability and allowlist state."
 			},
-			{
-				run:      "PATH=\"$PWD/bin:$PATH\""
-				purpose:  "Expose repo-local fallback adapters and validation commands."
-				fallback: true
-			},
-			{
-				run:      "repo-git status ."
-				purpose:  "Fallback repository state check through bounded repo-git adapter."
-				when:     "MCP git observation is unavailable, denied, insufficient, or explicitly targeted by validation"
-				fallback: true
-			},
-			{
-				run:      "repo-git diff ."
-				purpose:  "Fallback diff check through bounded repo-git adapter."
-				when:     "MCP git observation is unavailable, denied, insufficient, or explicitly targeted by validation"
-				fallback: true
-			},
-			{
-				run:      "repo-rg 'literal text' . literal 80"
-				purpose:  "Fallback bounded literal search for exact strings."
-				when:     "MCP ripgrep observation is unavailable, denied, insufficient, or explicitly targeted by validation"
-				fallback: true
-			},
-			{
-				run:      "repo-rg 'regex_pattern' . regex 80"
-				purpose:  "Fallback bounded regex search for structured source lookup."
-				when:     "MCP ripgrep observation is unavailable, denied, insufficient, or explicitly targeted by validation"
-				fallback: true
-			},
 		]
 
 		constraints: [
 			{
-				id:       "turn-start-mcp-first"
-				title:    "Start with configured MCP when visible"
+				id:       "turn-start-mcp-only"
+				title:    "Start with configured MCP"
 				severity: "required"
 				appliesTo: ["repo-aware work"]
-				statement: "At the start of repo-aware work, prefer bounded local inspection through configured git-mcp-server and mcp-ripgrep tools when Codex can see them."
+				statement: "At the start of repo-aware work, inspect repository status and source search only through configured git-mcp-server and mcp-ripgrep tools."
 			},
 			{
 				id:       "turn-start-report-mcp-blockers"
 				title:    "Report MCP blockers"
 				severity: "required"
 				appliesTo: ["repo-aware work"]
-				statement: "If MCP allowlists, missing commands, missing configuration, or denied repository paths block MCP observation, report that explicitly."
+				statement: "If MCP allowlists, missing commands, missing configuration, denied repository paths, or insufficient MCP tools block git or search observation, report that explicitly instead of falling back to shell."
 			},
 		]
 	}
@@ -443,7 +385,7 @@ package agents
 				when:    "after changing CUE schemas or schema-sync behavior"
 			},
 			{
-				run:     "CODEX_HOME=\"${CODEX_HOME:-$HOME/.local/share/codex}\" CODEX_STATE=\"${CODEX_STATE:-$HOME/.local/state/codex}\" PATH=\"$PWD/bin:$PATH\" cuerail-doctor"
+				run:     "CODEX_HOME=\"${CODEX_HOME:-$HOME/.local/share/codex}\" CODEX_STATE=\"${CODEX_STATE:-$HOME/.local/state/codex}\" CUERAIL_HOME=\"${CUERAIL_HOME:-$CODEX_HOME/tools/cuerail}\" CUERAIL_BIN=\"${CUERAIL_BIN:-$CUERAIL_HOME/bin}\" CUERAIL_STATE=\"${CUERAIL_STATE:-$CODEX_STATE/cuerail}\" PATH=\"$CUERAIL_BIN:$PATH\" \"$CUERAIL_BIN/cuerail-doctor\""
 				purpose: "Run Cuerail doctor."
 				when:    "after changing hook behavior, schema-sync behavior, or adapter wiring"
 			},
@@ -536,15 +478,15 @@ package agents
 			},
 			{
 				id:      "git-evidence"
-				status:  "preferred"
-				purpose: "Prefer git-mcp-server for git evidence; use repo-git only as explicit temporary fallback."
-				commands: ["git-mcp-server", "bin/repo-git"]
+				status:  "active"
+				purpose: "Use git-mcp-server as the only git evidence surface."
+				commands: ["git-mcp-server"]
 			},
 			{
 				id:      "search-evidence"
-				status:  "preferred"
-				purpose: "Prefer mcp-ripgrep for search evidence; use repo-rg only as explicit temporary fallback."
-				commands: ["mcp-ripgrep", "bin/repo-rg"]
+				status:  "active"
+				purpose: "Use mcp-ripgrep as the only search evidence surface."
+				commands: ["mcp-ripgrep"]
 			},
 			{
 				id:      "hook-behavior"

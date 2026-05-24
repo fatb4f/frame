@@ -27,7 +27,6 @@ esac
 need git
 need mkdir
 need chmod
-need mv
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 source_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
@@ -36,7 +35,7 @@ if ! git -C "$source_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   die "source root is not a git checkout: $source_root"
 fi
 
-mkdir -p "$CODEX_HOME/tools" "$CODEX_HOME/bin" "$CUERAIL_TURNS"
+mkdir -p "$CODEX_HOME/tools" "$CUERAIL_TURNS"
 
 if [ -L "$CUERAIL_HOME" ]; then
   die "CUERAIL_HOME must be a git worktree, not a symlink: $CUERAIL_HOME"
@@ -54,36 +53,20 @@ elif [ "$(git -C "$CUERAIL_HOME" rev-parse --show-toplevel)" = "$CODEX_HOME" ]; 
   die "CODEX_HOME must not be the cuerail git root"
 fi
 
-write_wrapper() {
-  name=$1
-  target=$2
-  tmp="$CODEX_HOME/bin/.$name.tmp.$$"
-
-  if [ ! -x "$target" ]; then
-    printf 'cuerail-install: pending runtime command: %s\n' "$target" >&2
-    return 0
-  fi
-
-  {
-    printf '%s\n' '#!/usr/bin/env sh'
-    printf '%s\n' 'set -eu'
-    printf '%s\n' ': "${CODEX_HOME:?CODEX_HOME is required}"'
-    printf '%s\n' ': "${CODEX_STATE:?CODEX_STATE is required}"'
-    printf '%s\n' ': "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"'
-    printf 'exec "$CUERAIL_HOME/bin/%s" "$@"\n' "$name"
-  } >"$tmp"
-  chmod 755 "$tmp"
-  mv "$tmp" "$CODEX_HOME/bin/$name"
-}
-
-write_wrapper cuerail-hook "$CUERAIL_HOME/bin/cuerail-hook"
-write_wrapper cuerail-doctor "$CUERAIL_HOME/bin/cuerail-doctor"
-write_wrapper cuerail-schema-sync "$CUERAIL_HOME/bin/cuerail-schema-sync"
-write_wrapper cuerail-run "$CUERAIL_HOME/bin/cuerail-run"
-write_wrapper cuerail-mcp-ripgrep "$CUERAIL_HOME/bin/cuerail-mcp-ripgrep"
-write_wrapper cuerail-mcp-capture "$CUERAIL_HOME/bin/cuerail-mcp-capture"
-write_wrapper cuerail-git-capture "$CUERAIL_HOME/bin/cuerail-git-capture"
-write_wrapper cuerail-rg-capture "$CUERAIL_HOME/bin/cuerail-rg-capture"
+if [ -d "$CODEX_HOME/bin" ]; then
+  for name in \
+    cuerail-hook \
+    cuerail-doctor \
+    cuerail-schema-sync \
+    cuerail-run \
+    cuerail-mcp-ripgrep \
+    cuerail-mcp-capture \
+    cuerail-git-capture \
+    cuerail-rg-capture
+  do
+    rm -f "$CODEX_HOME/bin/$name"
+  done
+fi
 
 chmod 700 "$CUERAIL_STATE" "$CUERAIL_TURNS" 2>/dev/null || true
 
@@ -91,4 +74,5 @@ printf 'CUERAIL_HOME=%s\n' "$CUERAIL_HOME"
 printf 'CUERAIL_STATE=%s\n' "$CUERAIL_STATE"
 printf 'CUERAIL_TURNS=%s\n' "$CUERAIL_TURNS"
 printf 'CUERAIL_WORKTREE_BRANCH=%s\n' "$CUERAIL_WORKTREE_BRANCH"
+printf 'CUERAIL_BIN=%s\n' "$CUERAIL_HOME/bin"
 printf 'Run cuerail-mcp-capture after manual install.\n'

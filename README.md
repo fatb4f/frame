@@ -226,6 +226,6 @@ frame
 repo-frame
 noMCP
 FRAME_HOME
-frame-codex-hook
-frame-doctor
+legacy/bin/frame-codex-hook
+legacy/bin/frame-doctor
 ```

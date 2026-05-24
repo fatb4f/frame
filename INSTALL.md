@@ -27,14 +27,13 @@ $CODEX_HOME/tools/cuerail/
 Generated install surface:
 
 ```txt
-$CODEX_HOME/bin/cuerail-hook
-$CODEX_HOME/bin/cuerail-doctor
-$CODEX_HOME/bin/cuerail-schema-sync
-$CODEX_HOME/hooks.json
+$CODEX_HOME/config.toml
+$CODEX_HOME/AGENTS.md
+$CODEX_HOME/tools/cuerail/bin
 ```
 
-The files in `$CODEX_HOME/bin` are generated wrapper files, not symlinks. They
-provide a stable Codex-facing ABI and exec the runtime worktree commands.
+The active Cuerail command surface is `$CODEX_HOME/tools/cuerail/bin`.
+`$CODEX_HOME/bin` must not contain independent Cuerail implementations.
 
 Mutable state:
 
@@ -98,11 +97,10 @@ runtime branch.
 
 ```txt
 create $CODEX_HOME/tools
-create $CODEX_HOME/bin
 create $CODEX_STATE/cuerail/turns
 materialize $CODEX_HOME/tools/cuerail as a Git worktree when missing
 use CUERAIL_WORKTREE_BRANCH or cuerail-runtime for the worktree branch
-install generated wrappers only when runtime commands exist
+remove legacy Cuerail wrappers from $CODEX_HOME/bin
 refuse to use $CODEX_HOME itself as the tracked checkout
 refuse symlinked runtime paths
 ```

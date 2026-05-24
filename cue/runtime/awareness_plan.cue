@@ -82,8 +82,8 @@ _schemaAuthorityRepoRoot: manifest.repos.frame.root
 		tool:      "mcp-ripgrep"
 		op:        "advanced-search"
 		input: {
-			pattern:      "AGENTS.md"
-			path:         "."
+			pattern:      "skills/cuerail/SKILL.md"
+			path:         "$CODEX_HOME"
 			fixedStrings: true
 			maxResults:   20
 		}

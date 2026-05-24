@@ -65,10 +65,11 @@ package agents
 			id:      "agent-contract"
 			role:    "authority"
 			owner:   "cue"
-			purpose: "Repo-local agent and project constraints."
+			purpose: "Migration artifact for the former repo-local agent contract; active policy lives in the Cuerail skill."
 			paths: ["cue/agents/agents.cue"]
 			cueRefs: ["#AgentContract"]
-			mayDecide: ["agent constraints", "project constraints", "authority boundaries", "observation policy", "validation policy"]
+			mayDecide: ["historical projection shape", "migration validation shape"]
+			mustNotDecide: ["active agent policy", "agent constraints", "project constraints", "observation policy"]
 		},
 		{
 			id:      "hook-manifest"
@@ -139,10 +140,11 @@ package agents
 			id:      "agent-contract-controller"
 			role:    "controller"
 			owner:   "cue"
-			purpose: "Controls static repo contract projection and constraints."
+			purpose: "Controls static migration projection for the former repo contract."
 			paths: ["cue/agents/agents.cue"]
 			cueRefs: ["#AgentContract"]
-			mayDecide: ["agent and project constraint projection"]
+			mayDecide: ["historical contract projection"]
+			mustNotDecide: ["active agent policy"]
 		},
 		{
 			id:      "runtime-hook-controller"
@@ -334,7 +336,7 @@ package agents
 			id:      "git-mcp-server"
 			role:    "adapter"
 			owner:   "mcp"
-			purpose: "Preferred live git adapter for observations and user-requested staging or commits."
+			purpose: "Only live git adapter for observations and user-requested staging or commits."
 			commands: [
 				"git-mcp-server.git_status",
 				"git-mcp-server.git_diff_staged",
@@ -350,33 +352,9 @@ package agents
 			id:      "mcp-ripgrep"
 			role:    "adapter"
 			owner:   "mcp"
-			purpose: "Preferred live bounded search adapter."
+			purpose: "Only live bounded search adapter."
 			commands: ["mcp-ripgrep"]
 			evidenceProduced: ["raw MCP ripgrep observations"]
-			mustNotWrite: ["repository mutations"]
-		},
-		{
-			id:      "repo-git"
-			role:    "adapter"
-			owner:   "shell"
-			purpose: "Bounded fallback git observation adapter."
-			paths: ["bin/repo-git"]
-			commands: ["repo-git status .", "repo-git diff ."]
-			cueRefs: ["#FallbackAdapterFacts"]
-			evidenceProduced: ["fallback git observations"]
-			mustNotDecide: ["adapter lifecycle facts", "replacement target"]
-			mustNotWrite: ["git index", "git commits", "repository mutations"]
-		},
-		{
-			id:      "repo-rg"
-			role:    "adapter"
-			owner:   "shell"
-			purpose: "Bounded fallback search adapter."
-			paths: ["bin/repo-rg"]
-			commands: ["repo-rg '<query>' . literal 80", "repo-rg '<query>' . regex 80"]
-			cueRefs: ["#FallbackAdapterFacts"]
-			evidenceProduced: ["fallback search observations"]
-			mustNotDecide: ["adapter lifecycle facts", "replacement target"]
 			mustNotWrite: ["repository mutations"]
 		},
 		{
@@ -470,7 +448,7 @@ package agents
 		{
 			id:      "shell-syntax"
 			owner:   "shell"
-			command: "PATH=\"$PWD/bin:$PATH\" sh -n bin/*"
+			command: "sh -n bin/cuerail-* bin/git-mcp-go-cuerail"
 			validates: ["shell script syntax"]
 			inputs: ["bin/*"]
 			outputs: ["validation status"]
@@ -546,12 +524,14 @@ package agents
 	]
 
 	invariants: [
-		"CUE owns policy, schema, projection, validation shape, and agent/project constraints.",
+		"CUE owns runtime policy, schema, projection, and validation shape.",
+		"Active Cuerail agent procedure lives in $CODEX_HOME/skills/cuerail/SKILL.md.",
+		"cue/agents is a migration artifact, not active agent authority.",
 		"Shell owns mechanics only.",
 		"Shell controllers must not decide policy or semantic projection.",
-		"MCP is preferred for repo observations.",
-		"git-mcp-server is the preferred surface for user-requested staging and commits.",
-		"repo-git and repo-rg are bounded fallback adapters only.",
+		"MCP is required for repo git and search observations.",
+		"git-mcp-server is the only surface for user-requested staging and commits.",
+		"repo-git and repo-rg are not agent observation surfaces.",
 		"Generated schemas are adapter inputs, not policy authority.",
 		"Markdown is a bootstrap pointer only.",
 		"Gate runner may be shell-driven, but gate expectations should be CUE-described.",

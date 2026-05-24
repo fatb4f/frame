@@ -36,7 +36,7 @@ check_node_version() {
 
 assert_ripgrep_mcp_config() {
   config_file="$CODEX_HOME/config.toml"
-  expected_command="$CODEX_HOME/bin/cuerail-mcp-ripgrep"
+  expected_command="$CUERAIL_HOME/bin/cuerail-mcp-ripgrep"
 
   [ -f "$config_file" ] || die "missing Codex config: $config_file"
 
@@ -44,11 +44,10 @@ assert_ripgrep_mcp_config() {
     /^\[mcp_servers\.ripgrep\]$/ { in_section = 1; next }
     /^\[/ && in_section { in_section = 0 }
     in_section && $0 == "command = \"" expected_command "\"" { command_ok = 1 }
-    in_section && $0 == "args = []" { args_ok = 1 }
-    in_section && $0 == "env_vars = [\"PATH\", \"CODEX_STATE\"]" { env_ok = 1 }
-    END { exit(command_ok && args_ok && env_ok ? 0 : 1) }
+    in_section && $0 == "env_vars = [\"PATH\", \"CODEX_HOME\", \"CODEX_STATE\", \"CUERAIL_HOME\", \"CUERAIL_BIN\", \"CUERAIL_STATE\"]" { env_ok = 1 }
+    END { exit(command_ok && env_ok ? 0 : 1) }
   ' "$config_file" ||
-    die "Codex MCP config missing ripgrep wrapper projection"
+    die "Codex MCP config missing canonical ripgrep runtime projection"
 }
 
 run_runtime_checks() {
@@ -64,12 +63,12 @@ run_runtime_checks() {
 
   check_node_version
 
-  wrapper="$CODEX_HOME/bin/cuerail-mcp-ripgrep"
+  wrapper="$CUERAIL_HOME/bin/cuerail-mcp-ripgrep"
   runtime_prefix="$CODEX_STATE/cuerail/mcp/mcp-ripgrep"
   runtime_bin="$runtime_prefix/node_modules/.bin/mcp-ripgrep"
   marker="$runtime_prefix/.cuerail-adapter.json"
 
-  [ -x "$wrapper" ] || die "missing executable projected wrapper: $wrapper"
+  [ -x "$wrapper" ] || die "missing executable canonical wrapper: $wrapper"
   [ -x "$runtime_bin" ] || die "missing executable mcp-ripgrep package bin: $runtime_bin"
   [ -f "$marker" ] || die "missing mcp-ripgrep runtime marker: $marker"
 
