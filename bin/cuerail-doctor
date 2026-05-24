@@ -24,7 +24,7 @@ check_node_version() {
 
 assert_ripgrep_mcp_config() {
   config_file="$CODEX_HOME/config.toml"
-  expected_command="/home/_404/.local/share/codex/bin/cuerail-mcp-ripgrep"
+  expected_command="$CODEX_HOME/bin/cuerail-mcp-ripgrep"
 
   [ -f "$config_file" ] || die "missing Codex config: $config_file"
 
@@ -39,11 +39,52 @@ assert_ripgrep_mcp_config() {
     die "Codex MCP config missing ripgrep wrapper projection"
 }
 
+run_runtime_checks() {
+  : "${CODEX_HOME:?CODEX_HOME is required}"
+  : "${CODEX_STATE:?CODEX_STATE is required}"
+  : "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"
+
+  need awk
+  need jq
+  need node
+  need rg
+  need sed
+
+  check_node_version
+
+  wrapper="$CODEX_HOME/bin/cuerail-mcp-ripgrep"
+  runtime_prefix="$CODEX_STATE/cuerail/mcp/mcp-ripgrep"
+  runtime_bin="$runtime_prefix/node_modules/.bin/mcp-ripgrep"
+  marker="$runtime_prefix/.cuerail-adapter.json"
+
+  [ -x "$wrapper" ] || die "missing executable projected wrapper: $wrapper"
+  [ -x "$runtime_bin" ] || die "missing executable mcp-ripgrep package bin: $runtime_bin"
+  [ -f "$marker" ] || die "missing mcp-ripgrep runtime marker: $marker"
+
+  jq -e \
+    --arg runtime_prefix "$runtime_prefix" \
+    --arg runtime_bin "$runtime_bin" \
+    --arg rg_path "$(command -v rg)" \
+    '.name == "ripgrep" and
+     .package == "mcp-ripgrep" and
+     .version == "0.4.0" and
+     .transport == "stdio" and
+     .runtimePrefix == $runtime_prefix and
+     .bin == $runtime_bin and
+     .rg == $rg_path and
+     (.node | type == "string" and startswith("v"))' \
+    "$marker" >/dev/null ||
+    die "invalid mcp-ripgrep runtime marker: $marker"
+
+  assert_ripgrep_mcp_config
+}
+
 cleanup_temp_files() {
   [ -n "${output_json:-}" ] && rm -f "$output_json"
   [ -n "${stderr_log:-}" ] && rm -f "$stderr_log"
   [ -n "${fixture_wrap_json:-}" ] && rm -f "$fixture_wrap_json"
   [ -n "${fixture_persist_json:-}" ] && rm -f "$fixture_persist_json"
+  [ -n "${mcp_adapter_json:-}" ] && rm -f "$mcp_adapter_json"
   [ -n "${manifest_json:-}" ] && rm -f "$manifest_json"
   [ -n "${doctor_fixture_state:-}" ] && rm -rf "$doctor_fixture_state"
   return 0
@@ -109,12 +150,26 @@ assert_manifest_content() {
   manifest_json=
 }
 
+mode=${1:-source}
+[ "$#" -le 1 ] || die "usage: cuerail-doctor [source|runtime|all]"
+
+case "$mode" in
+  source|runtime|all) ;;
+  *) die "usage: cuerail-doctor [source|runtime|all]" ;;
+esac
+
 : "${CODEX_HOME:?CODEX_HOME is required}"
 : "${CODEX_STATE:?CODEX_STATE is required}"
 : "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"
 
 CUERAIL_STATE="${CUERAIL_STATE:-$CODEX_STATE/cuerail}"
 CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_STATE/turns}"
+
+if [ "$mode" = "runtime" ]; then
+  run_runtime_checks
+  printf 'cuerail-doctor: runtime ok\n'
+  exit 0
+fi
 
 case "$CUERAIL_HOME" in
   "$CODEX_HOME"/tools/cuerail) ;;
@@ -128,6 +183,7 @@ esac
 [ -x "$CUERAIL_HOME/bin/cuerail-schema-sync" ] || die "missing executable bin/cuerail-schema-sync"
 [ -x "$CUERAIL_HOME/bin/cuerail-adapter-export" ] || die "missing executable bin/cuerail-adapter-export"
 [ -x "$CUERAIL_HOME/bin/cuerail-mcp-ripgrep" ] || die "missing executable bin/cuerail-mcp-ripgrep"
+[ -x "$CUERAIL_HOME/bin/cuerail-mcp-capture" ] || die "missing executable bin/cuerail-mcp-capture"
 [ -x "$CUERAIL_HOME/bin/cuerail-git-mcp-go" ] || die "missing executable bin/cuerail-git-mcp-go"
 [ -x "$CUERAIL_HOME/bin/git-mcp-go-cuerail" ] || die "missing executable bin/git-mcp-go-cuerail"
 [ -d "$CUERAIL_HOME/cue" ] || die "missing active CUE package"
@@ -142,20 +198,11 @@ need mktemp
 need flock
 need mkdir
 need mv
-need node
 need rm
-need rg
 need sed
 need sha256sum
 need tr
 need wc
-
-check_node_version
-[ -x "/home/_404/.local/share/codex/bin/cuerail-mcp-ripgrep" ] ||
-  die "missing executable /home/_404/.local/share/codex/bin/cuerail-mcp-ripgrep"
-[ -x "$CODEX_STATE/cuerail/mcp/mcp-ripgrep/node_modules/.bin/mcp-ripgrep" ] ||
-  die "missing mcp-ripgrep package bin under CODEX_STATE"
-assert_ripgrep_mcp_config
 
 trap cleanup_temp_files EXIT HUP INT TERM
 
@@ -169,6 +216,7 @@ expected_persisted_count=0
 
 (
   cd "$CUERAIL_HOME"
+  sh -n bin/*
   cue vet -c=false ./cue
   cue vet -c=false ./cue/adapters
   cue vet -c=false ./cue/runtime
@@ -183,6 +231,37 @@ expected_persisted_count=0
   cue export ./cue/runtime -e '#ExamplePostToolUseHookOutput' >/dev/null
   cue export ./cue/runtime -e '#ExampleStopHookOutput' >/dev/null
 )
+
+mcp_adapter_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-mcp-ripgrep-adapter.XXXXXX.json")
+(
+  cd "$CUERAIL_HOME"
+  cue export ./cue/adapters -e '#MCPRipgrepAdapter' --out json
+) >"$mcp_adapter_json"
+jq -e '
+  .name == "ripgrep" and
+  .package == "mcp-ripgrep" and
+  .version == "0.4.0" and
+  .transport == "stdio" and
+  (.command | not) and
+  .commandProjection == {
+    "rootEnv": "CODEX_HOME",
+    "rel": "bin/cuerail-mcp-ripgrep"
+  } and
+  .runtime == {
+    "rootEnv": "CODEX_STATE",
+    "rel": "cuerail/mcp/mcp-ripgrep",
+    "binRel": "node_modules/.bin/mcp-ripgrep",
+    "marker": ".cuerail-adapter.json"
+  } and
+  .requires.nodeMajorMin == 18 and
+  .requires.rg == true and
+  .trust.policyBoundary == false and
+  .trust.sandboxBoundary == false and
+  ([.tools[]] | index("search") != null)
+' "$mcp_adapter_json" >/dev/null ||
+  die "invalid exported mcp-ripgrep adapter projection"
+rm -f "$mcp_adapter_json"
+mcp_adapter_json=
 
 adapter_json="$doctor_fixture_state/cache/mcp/git-mcp-go/adapter.json"
 CUERAIL_CACHE="$doctor_fixture_state/cache" "$CUERAIL_HOME/bin/cuerail-adapter-export" git-mcp-go >/dev/null
@@ -321,4 +400,8 @@ assert_manifest_content "$hardening_events_dir/000004-stop.cue" "Stop" ""
 
 "$CUERAIL_HOME/bin/cuerail-schema-sync" --check >/dev/null
 
-printf 'cuerail-doctor: ok\n'
+if [ "$mode" = "all" ]; then
+  run_runtime_checks
+fi
+
+printf 'cuerail-doctor: %s ok\n' "$mode"

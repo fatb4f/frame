@@ -80,6 +80,7 @@ write_wrapper cuerail-hook "$CUERAIL_HOME/bin/cuerail-hook"
 write_wrapper cuerail-doctor "$CUERAIL_HOME/bin/cuerail-doctor"
 write_wrapper cuerail-schema-sync "$CUERAIL_HOME/bin/cuerail-schema-sync"
 write_wrapper cuerail-mcp-ripgrep "$CUERAIL_HOME/bin/cuerail-mcp-ripgrep"
+write_wrapper cuerail-mcp-capture "$CUERAIL_HOME/bin/cuerail-mcp-capture"
 
 chmod 700 "$CUERAIL_STATE" "$CUERAIL_TURNS" 2>/dev/null || true
 
@@ -87,3 +88,4 @@ printf 'CUERAIL_HOME=%s\n' "$CUERAIL_HOME"
 printf 'CUERAIL_STATE=%s\n' "$CUERAIL_STATE"
 printf 'CUERAIL_TURNS=%s\n' "$CUERAIL_TURNS"
 printf 'CUERAIL_WORKTREE_BRANCH=%s\n' "$CUERAIL_WORKTREE_BRANCH"
+printf 'Run cuerail-mcp-capture after manual install.\n'

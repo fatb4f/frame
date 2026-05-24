@@ -1,0 +1,55 @@
+#!/usr/bin/env sh
+set -eu
+
+die() {
+  printf 'cuerail-mcp-capture: %s\n' "$1" >&2
+  exit 1
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+check_node_version() {
+  node_version=$(node --version | sed 's/^v//')
+  node_major=${node_version%%.*}
+  case "$node_major" in
+    ''|*[!0-9]*) die "cannot parse node version: $(node --version)" ;;
+  esac
+  [ "$node_major" -ge 18 ] ||
+    die "node >=18 required for mcp-ripgrep, got $(node --version)"
+}
+
+: "${CODEX_STATE:?CODEX_STATE is required}"
+
+prefix="$CODEX_STATE/cuerail/mcp/mcp-ripgrep"
+bin="$prefix/node_modules/.bin/mcp-ripgrep"
+marker="$prefix/.cuerail-adapter.json"
+tmp="$prefix/.cuerail-adapter.json.tmp.$$"
+
+need node
+need rg
+need sed
+need mv
+
+check_node_version
+[ -x "$bin" ] || die "missing executable mcp-ripgrep bin: $bin"
+
+node_version=$(node --version)
+rg_path=$(command -v rg)
+
+cat >"$tmp" <<EOF
+{
+  "name": "ripgrep",
+  "package": "mcp-ripgrep",
+  "version": "0.4.0",
+  "transport": "stdio",
+  "runtimePrefix": "$prefix",
+  "bin": "$bin",
+  "node": "$node_version",
+  "rg": "$rg_path"
+}
+EOF
+
+mv "$tmp" "$marker"
+printf '%s\n' "$marker"
