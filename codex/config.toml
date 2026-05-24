@@ -1,0 +1,225 @@
+# managed by chezmoi
+# Cuerail runtime integration is global here, not repo-local AGENTS.md policy.
+
+model = "gpt-5.5"
+model_reasoning_effort = "medium"
+model_reasoning_summary = "auto"
+
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+
+web_search = "disabled"
+project_doc_max_bytes = 24576
+allow_login_shell = false
+
+log_dir = "/home/_404/.local/state/codex/log"
+sqlite_home = "/home/_404/.local/state/codex/sqlite"
+
+[features]
+hooks = true
+shell_tool = true
+shell_snapshot = false
+
+[history]
+persistence = "none"
+
+[sandbox_workspace_write]
+network_access = true
+writable_roots = [
+  "/home/_404/src",
+  "/home/_404/.local/state/codex",
+  "/home/_404/.local/cache/codex",
+  "/home/_404/.local/share/codex",
+  "/home/_404/.local/share/chezmoi",
+]
+
+# Cuerail is injected globally through config.toml.
+# Do not rely on repo-local AGENTS.md or the current working directory to
+# construct Cuerail runtime paths.
+[shell_environment_policy]
+inherit = "core"
+include_only = [
+  "HOME",
+  "PATH",
+  "SHELL",
+  "TERM",
+  "USER",
+  "LOGNAME",
+  "PWD",
+  "LANG",
+  "LC_*",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_STATE_HOME",
+  "XDG_CACHE_HOME",
+  "TOOL_PATH_HOME",
+  "CODEX_HOME",
+  "CODEX_STATE",
+  "CUERAIL_HOME",
+  "CUERAIL_BIN",
+  "CUERAIL_STATE",
+]
+exclude = [
+  "*TOKEN*",
+  "*SECRET*",
+  "*KEY*",
+  "*PASSWORD*",
+]
+
+[shell_environment_policy.set]
+CODEX_HOME = "/home/_404/.local/share/codex"
+CODEX_STATE = "/home/_404/.local/state/codex"
+CUERAIL_HOME = "/home/_404/.local/share/codex/tools/cuerail"
+CUERAIL_BIN = "/home/_404/.local/share/codex/tools/cuerail/bin"
+CUERAIL_STATE = "/home/_404/.local/state/codex/cuerail"
+TOOL_PATH_HOME = "/home/_404/.local/share/path"
+PATH = "/home/_404/.local/share/codex/tools/cuerail/bin:/home/_404/.local/share/codex/bin:/home/_404/.local/share/path:/home/_404/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/bin"
+
+[tui]
+status_line = [
+  "model-with-reasoning",
+  "current-dir",
+  "model",
+  "context-used",
+  "five-hour-limit",
+  "weekly-limit",
+  "context-window-size",
+  "used-tokens",
+  "total-input-tokens",
+  "total-output-tokens",
+]
+
+[tui.model_availability_nux]
+"gpt-5.5" = 4
+
+# Cuerail sidecar hooks. The hook command is the installed runtime path, not a
+# repo-local checkout path.
+[[hooks.SessionStart]]
+matcher = "startup|resume|clear|compact"
+
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "/home/_404/.local/share/codex/tools/cuerail/bin/cuerail-hook"
+timeout = 60
+statusMessage = "Cuerail session start"
+
+[[hooks.UserPromptSubmit]]
+
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = "/home/_404/.local/share/codex/tools/cuerail/bin/cuerail-hook"
+timeout = 60
+statusMessage = "Cuerail prompt policy"
+
+[[hooks.PreToolUse]]
+matcher = "*"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "/home/_404/.local/share/codex/tools/cuerail/bin/cuerail-hook"
+timeout = 60
+statusMessage = "Cuerail pre-tool policy"
+
+[[hooks.PostToolUse]]
+matcher = "*"
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "/home/_404/.local/share/codex/tools/cuerail/bin/cuerail-hook"
+timeout = 60
+statusMessage = "Cuerail post-tool capture"
+
+[[hooks.Stop]]
+
+[[hooks.Stop.hooks]]
+type = "command"
+command = "/home/_404/.local/share/codex/tools/cuerail/bin/cuerail-hook"
+timeout = 60
+statusMessage = "Cuerail stop capture"
+
+[hooks.state]
+
+[hooks.state."/home/_404/.local/share/codex/config.toml:pre_tool_use:0:0"]
+trusted_hash = "sha256:0f668bf7b31ce21c47d5754fd57c0edf21bae44a2fee8a0cf278e74a5541893a"
+
+[hooks.state."/home/_404/.local/share/codex/config.toml:post_tool_use:0:0"]
+trusted_hash = "sha256:0a2ec8de83645e5134e31c9adf45dad27771c7ad01ebfb5498ed05e78bb5475c"
+
+[hooks.state."/home/_404/.local/share/codex/config.toml:session_start:0:0"]
+trusted_hash = "sha256:787ee3544875e222159516a2c5669d0617120fdd0f0e83edb201b69b232c37f1"
+
+[hooks.state."/home/_404/.local/share/codex/config.toml:user_prompt_submit:0:0"]
+trusted_hash = "sha256:80ebc8ab5df0dde4f8990213c626384f04a0cb7cf3952d341da3e31e48a9cc66"
+
+[hooks.state."/home/_404/.local/share/codex/config.toml:stop:0:0"]
+trusted_hash = "sha256:2b26124eb8fbd8b3698c1e332ecd19f4e9b4cb5d273c689809d2eeed10bab4e5"
+
+[mcp_servers.ripgrep]
+command = "/home/_404/.local/share/codex/tools/cuerail/bin/cuerail-mcp-ripgrep"
+env_vars = ["PATH", "CODEX_HOME", "CODEX_STATE", "CUERAIL_HOME", "CUERAIL_BIN", "CUERAIL_STATE"]
+
+[mcp_servers.ripgrep.tools.search]
+approval_mode = "approve"
+
+[mcp_servers.mcp-ripgrep]
+command = "/home/_404/.local/state/codex/cuerail/mcp/mcp-ripgrep/node_modules/.bin/mcp-ripgrep"
+env_vars = ["PATH", "CODEX_HOME", "CODEX_STATE", "CUERAIL_STATE"]
+
+[mcp_servers.mcp-ripgrep.tools.search]
+approval_mode = "approve"
+
+[mcp_servers.mcp-ripgrep.tools.list-files]
+approval_mode = "approve"
+
+[mcp_servers.mcp-ripgrep.tools.advanced-search]
+approval_mode = "approve"
+
+[mcp_servers.git-mcp-server]
+command = "/home/_404/.local/bin/git-mcp-go"
+args = ["serve", "--mode", "shell", "-r=/home/_404/src/frame,/home/_404/.local/share/chezmoi,/home/_404/.local/share/src/bashly.sh,/home/_404/.local/share/codex/tools/cuerail"]
+env_vars = ["PATH", "CODEX_HOME", "CODEX_STATE", "CUERAIL_HOME", "CUERAIL_BIN"]
+
+[mcp_servers.git-mcp-server.tools.git_status]
+approval_mode = "approve"
+
+[mcp_servers.git-mcp-server.tools.git_commit]
+approval_mode = "approve"
+
+[mcp_servers.git-mcp-server.tools.git_add]
+approval_mode = "approve"
+
+[mcp_servers.git-mcp-server.tools.git_diff_staged]
+approval_mode = "approve"
+
+[projects."/home/_404/.local/src/fatb4f/*"]
+trust_level = "trusted"
+
+[projects."/home/_404/.local/src/fatb4f/exercism"]
+trust_level = "trusted"
+
+[projects."/home/_404/.local/src/fatb4f/frame"]
+trust_level = "trusted"
+
+[projects."/home/_404/.local/src/fatb4f/microbash"]
+trust_level = "trusted"
+
+[projects."/home/_404/.local/share/chezmoi"]
+trust_level = "trusted"
+
+[projects."/home/_404/src/fatb4f/frame"]
+trust_level = "trusted"
+
+[projects."/home/_404/src/fatb4f/bashly.sh"]
+trust_level = "trusted"
+
+[projects."/home/_404/src"]
+trust_level = "trusted"
+
+[projects."/home/_404/src/fatb4f"]
+trust_level = "trusted"
+
+[projects."/home/_404/.local/share/codex/tools/cuerail"]
+trust_level = "trusted"
+
+[projects."/home/_404/.local/share/codex"]
+trust_level = "trusted"
