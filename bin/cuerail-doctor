@@ -230,6 +230,9 @@ expected_persisted_count=0
   cue export ./cue/runtime -e '#ExampleUserPromptSubmitHookOutput' >/dev/null
   cue export ./cue/runtime -e '#ExamplePostToolUseHookOutput' >/dev/null
   cue export ./cue/runtime -e '#ExampleStopHookOutput' >/dev/null
+  cue export ./cue/runtime -e '#ExampleGitRepoStatusCapture' >/dev/null
+  cue export ./cue/runtime -e '#ExampleGitRepoDiffCapture' >/dev/null
+  cue export ./cue/runtime -e '#ExampleGitRepoLogCapture' >/dev/null
 )
 
 mcp_adapter_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-mcp-ripgrep-adapter.XXXXXX.json")
@@ -270,6 +273,10 @@ CUERAIL_CACHE="$doctor_fixture_state/cache" "$CUERAIL_HOME/bin/cuerail-adapter-e
 jq -e '
   .mode == "shell" and
   .autoApprove == "allow-read-only" and
+  .evidence == {
+    "cacheRel": "mcp/git-mcp-go/evidence/repos",
+    "captures": ["status", "diff", "log"]
+  } and
   (.repoRoots | type == "array") and
   (.repoRoots | length > 0) and
   all(.repoRoots[]; type == "string" and length > 0) and
@@ -296,6 +303,14 @@ jq -e --slurpfile adapter "$adapter_json" '
 
 rm -f "$output_json"
 output_json=
+
+for fixture in "$CUERAIL_HOME"/test/fixtures/mcp/git-mcp-go/evidence/repos/*/*.json; do
+  [ -f "$fixture" ] || continue
+  (
+    cd "$CUERAIL_HOME"
+    cue vet -c=false ./cue/runtime "$fixture" -d '#GitRepoCapture'
+  ) || die "schema_invalid_git_repo_capture: $(basename "$fixture")"
+done
 
 for fixture in "$CUERAIL_HOME"/test/fixtures/hooks/*.json; do
   [ -f "$fixture" ] || continue

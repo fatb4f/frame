@@ -1,0 +1,27 @@
+{
+  "schema": "cuerail.git-mcp-go.capture.v1",
+  "adapter": "git-mcp-go",
+  "capturedAt": "2026-05-23T20:00:00Z",
+  "repo": {
+    "name": "frame",
+    "root": "/home/_404/src/frame"
+  },
+  "source": {
+    "tool": "git-mcp-go",
+    "mode": "shell",
+    "autoApprove": "allow-read-only"
+  },
+  "evidence": {
+    "cacheRel": "mcp/git-mcp-go/evidence/repos/frame/diff.json"
+  },
+  "kind": "diff",
+  "payload": {
+    "unstaged": "",
+    "stat": {
+      "files": 0,
+      "insertions": 0,
+      "deletions": 0
+    },
+    "paths": []
+  }
+}
