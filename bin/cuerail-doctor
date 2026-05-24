@@ -1,5 +1,7 @@
 #!/usr/bin/env sh
 set -eu
+LC_ALL=C
+export LC_ALL
 
 die() {
   printf 'cuerail-doctor: %s\n' "$1" >&2
@@ -15,8 +17,69 @@ cleanup_temp_files() {
   [ -n "${stderr_log:-}" ] && rm -f "$stderr_log"
   [ -n "${fixture_wrap_json:-}" ] && rm -f "$fixture_wrap_json"
   [ -n "${fixture_persist_json:-}" ] && rm -f "$fixture_persist_json"
+  [ -n "${manifest_json:-}" ] && rm -f "$manifest_json"
   [ -n "${doctor_fixture_state:-}" ] && rm -rf "$doctor_fixture_state"
   return 0
+}
+
+run_hook_fixture() {
+  fixture=$1
+  fixture_state=$2
+  fixture_turns=$3
+
+  output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-hook-output.XXXXXX.json")
+  stderr_log=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-hook-stderr.XXXXXX.log")
+
+  if ! CUERAIL_STATE="$fixture_state" CUERAIL_TURNS="$fixture_turns" "$CUERAIL_HOME/bin/cuerail-hook" <"$fixture" >"$output_json" 2>"$stderr_log"; then
+    die "fixture hook run failed: $(basename "$fixture")"
+  fi
+
+  jq -e . "$output_json" >/dev/null
+
+  if [ -n "$(sed -n '/cuerail-hook: using fallback for /p' "$stderr_log")" ]; then
+    die "fixture used fallback: $(basename "$fixture")"
+  fi
+
+  rm -f "$output_json" "$stderr_log"
+  output_json=
+  stderr_log=
+}
+
+validate_manifest_schema() {
+  manifest=$1
+
+  (
+    cd "$CUERAIL_HOME"
+    cue vet -c=false ./cue/runtime "$manifest" -d '#HookManifest'
+  ) || die "schema_invalid_manifest: $(basename "$manifest")"
+}
+
+assert_manifest_content() {
+  manifest=$1
+  expected_event=$2
+  expected_tool=$3
+
+  manifest_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-manifest.XXXXXX.json")
+  (
+    cd "$CUERAIL_HOME"
+    cue vet -c=false ./cue/runtime "$manifest" -d '#HookManifest' &&
+      cue export "$manifest" >"$manifest_json"
+  ) || die "schema_invalid_manifest: $(basename "$manifest")"
+
+  if [ -n "$expected_tool" ]; then
+    jq -e --arg event "$expected_event" --arg tool "$expected_tool" \
+      '.input.hook_event_name == $event and .input.tool_name == $tool and .capture.persist == true' \
+      "$manifest_json" >/dev/null ||
+      die "wrong_manifest_content: $(basename "$manifest")"
+  else
+    jq -e --arg event "$expected_event" \
+      '.input.hook_event_name == $event and .capture.persist == true' \
+      "$manifest_json" >/dev/null ||
+      die "wrong_manifest_content: $(basename "$manifest")"
+  fi
+
+  rm -f "$manifest_json"
+  manifest_json=
 }
 
 : "${CODEX_HOME:?CODEX_HOME is required}"
@@ -58,7 +121,10 @@ trap cleanup_temp_files EXIT HUP INT TERM
 
 mkdir -p "$CUERAIL_TURNS"
 doctor_fixture_state=$(mktemp -d "${TMPDIR:-/tmp}/cuerail-doctor-state.XXXXXX")
-doctor_fixture_turns="$doctor_fixture_state/cuerail/turns"
+doctor_fixture_runtime="$doctor_fixture_state/runtime"
+doctor_fixture_turns="$doctor_fixture_runtime/cuerail/turns"
+doctor_hardening_runtime="$doctor_fixture_state/004c1"
+doctor_hardening_turns="$doctor_hardening_runtime/cuerail/turns"
 expected_persisted_count=0
 
 (
@@ -77,8 +143,6 @@ expected_persisted_count=0
 for fixture in "$CUERAIL_HOME"/test/fixtures/hooks/*.json; do
   [ -f "$fixture" ] || continue
 
-  output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-hook-output.XXXXXX.json")
-  stderr_log=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-hook-stderr.XXXXXX.log")
   fixture_wrap_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-hook-wrapped.XXXXXX.json")
   fixture_persist_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-hook-persist.XXXXXX.json")
 
@@ -92,17 +156,9 @@ for fixture in "$CUERAIL_HOME"/test/fixtures/hooks/*.json; do
   fixture_persist=$(jq -r 'if . == true then "true" else "false" end' "$fixture_persist_json")
   [ "$fixture_persist" = "false" ] || expected_persisted_count=$((expected_persisted_count + 1))
 
-  if ! CUERAIL_STATE="$doctor_fixture_state/cuerail" CUERAIL_TURNS="$doctor_fixture_turns" "$CUERAIL_HOME/bin/cuerail-hook" <"$fixture" >"$output_json" 2>"$stderr_log"; then
-    die "fixture hook run failed: $(basename "$fixture")"
-  fi
+  run_hook_fixture "$fixture" "$doctor_fixture_runtime/cuerail" "$doctor_fixture_turns"
 
-  jq -e . "$output_json" >/dev/null
-
-  if [ -n "$(sed -n '/cuerail-hook: using fallback for /p' "$stderr_log")" ]; then
-    die "fixture used fallback: $(basename "$fixture")"
-  fi
-
-  rm -f "$output_json" "$stderr_log" "$fixture_wrap_json" "$fixture_persist_json"
+  rm -f "$fixture_wrap_json" "$fixture_persist_json"
 done
 
 output_json=
@@ -113,15 +169,77 @@ fixture_persist_json=
 persisted_count=0
 for manifest in "$doctor_fixture_turns"/session-example/turn-example/events/*.cue; do
   [ -f "$manifest" ] || continue
-  (
-    cd "$CUERAIL_HOME"
-    cue vet -c=false ./cue/runtime "$manifest" -d '#HookManifest'
-  ) || die "persisted manifest validation failed: $(basename "$manifest")"
+  validate_manifest_schema "$manifest"
   persisted_count=$((persisted_count + 1))
 done
 
 [ "$persisted_count" -eq "$expected_persisted_count" ] ||
   die "unexpected persisted manifest count: got $persisted_count expected $expected_persisted_count"
+
+for fixture in "$CUERAIL_HOME"/test/fixtures/hooks/004c1/*.json; do
+  [ -f "$fixture" ] || continue
+  run_hook_fixture "$fixture" "$doctor_hardening_runtime/cuerail" "$doctor_hardening_turns"
+done
+
+hardening_events_dir="$doctor_hardening_turns/session-example/turn-example/events"
+[ -d "$hardening_events_dir" ] || die "events directory missing after hardening replay"
+
+expected_filenames='000001-user-prompt-submit.cue
+000002-post-tool-use.mcp-ripgrep.cue
+000003-post-tool-use.git-mcp-server.cue
+000004-stop.cue'
+
+actual_filenames=
+hardening_count=0
+for manifest in "$hardening_events_dir"/*.cue; do
+  [ -f "$manifest" ] || continue
+  base_name=${manifest##*/}
+  hardening_count=$((hardening_count + 1))
+  if [ -n "$actual_filenames" ]; then
+    actual_filenames="${actual_filenames}
+${base_name}"
+  else
+    actual_filenames=$base_name
+  fi
+done
+
+for ignored_name in \
+  000002-post-tool-use.cue \
+  000004-pre-tool-use.cue \
+  000004-post-tool-use.cue \
+  000005-post-tool-use.cue \
+  000006-post-tool-use.cue
+do
+  [ ! -e "$hardening_events_dir/$ignored_name" ] ||
+    die "ignored_event_persisted: $ignored_name"
+done
+
+[ "$hardening_count" -eq 4 ] ||
+  die "wrong_count: got $hardening_count expected 4"
+
+expected_seq=1
+for manifest in "$hardening_events_dir"/*.cue; do
+  [ -f "$manifest" ] || continue
+  base_name=${manifest##*/}
+  seq_text=${base_name%%-*}
+  expected_seq_text=$(printf '%06d' "$expected_seq")
+  [ "$seq_text" = "$expected_seq_text" ] ||
+    die "sequence_gap: got $seq_text expected $expected_seq_text"
+  expected_seq=$((expected_seq + 1))
+done
+
+[ "$actual_filenames" = "$expected_filenames" ] ||
+  die "wrong_filename_set: got $(printf '%s' "$actual_filenames" | tr '\n' ' ')"
+
+validate_manifest_schema "$hardening_events_dir/000001-user-prompt-submit.cue"
+validate_manifest_schema "$hardening_events_dir/000002-post-tool-use.mcp-ripgrep.cue"
+validate_manifest_schema "$hardening_events_dir/000003-post-tool-use.git-mcp-server.cue"
+validate_manifest_schema "$hardening_events_dir/000004-stop.cue"
+
+assert_manifest_content "$hardening_events_dir/000001-user-prompt-submit.cue" "UserPromptSubmit" ""
+assert_manifest_content "$hardening_events_dir/000002-post-tool-use.mcp-ripgrep.cue" "PostToolUse" "mcp-ripgrep"
+assert_manifest_content "$hardening_events_dir/000003-post-tool-use.git-mcp-server.cue" "PostToolUse" "git-mcp-server"
+assert_manifest_content "$hardening_events_dir/000004-stop.cue" "Stop" ""
 
 "$CUERAIL_HOME/bin/cuerail-schema-sync" --check >/dev/null
 
