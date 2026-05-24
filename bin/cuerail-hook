@@ -156,7 +156,7 @@ if (
       .hookInput.hook_event_name == "PostToolUse";
     def compact_awareness:
       {
-        executable: (.awarenessExecutable // true),
+        executable: (if has("awarenessExecutable") then .awarenessExecutable else true end),
         plan: (.awarenessPlan // null),
         results: (.awarenessResults // [])
       } + (if (.awarenessExecutionReason? // "") != "" then {reason: .awarenessExecutionReason} else {} end);

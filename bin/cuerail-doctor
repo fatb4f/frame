@@ -366,6 +366,7 @@ jq -n '{
       .agentFeed.source == "hook.raw" and
       .output.hookSpecificOutput.hookEventName == "SessionStart" and
       (.output.hookSpecificOutput.additionalContext | contains("cuerail.agentFeedback.raw.v1")) and
+      (.output.hookSpecificOutput.additionalContext | contains("\"executable\":false")) and
       (.output.hookSpecificOutput.additionalContext | contains("no_mcp_read_executor")) and
       (.output.hookSpecificOutput.additionalContext | length) == .agentFeed.bytes and
       (.output.hookSpecificOutput.additionalContext | length) <= .agentFeed.maxBytes
@@ -404,6 +405,7 @@ jq -n '{
       .agentFeed.payloadKind == "raw.event" and
       .agentFeed.source == "hook.raw" and
       .output.hookSpecificOutput.hookEventName == "PreToolUse" and
+      (.output.hookSpecificOutput.additionalContext | contains("\"executable\":false")) and
       (.output.hookSpecificOutput.additionalContext | contains("\"results\":[]")) and
       (.output.hookSpecificOutput.additionalContext | contains("no_mcp_read_executor")) and
       (.output.hookSpecificOutput.additionalContext | contains("pre-tool-use.rg.tool-policy"))
