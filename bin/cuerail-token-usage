@@ -91,7 +91,6 @@ status=
 degraded=true
 
 if [ -z "$token_line" ]; then
-  source_kind=unknown
   status=unavailable
   append_note "no supported token usage artifact found"
 else
