@@ -41,7 +41,7 @@ package agents
 			{
 				id:      "git-mcp-server"
 				status:  "preferred"
-				purpose: "Preferred live git observation surface for agent-visible repository observations."
+				purpose: "Preferred live git surface for agent-visible repository observations and user-requested staging or commits."
 				commands: ["git-mcp-server"]
 			},
 			{
@@ -260,6 +260,68 @@ package agents
 				severity: "forbidden"
 				appliesTo: ["repo-aware work", "search"]
 				statement: "Keep observations bounded to the current repository. Do not search $HOME or /."
+			},
+		]
+	}
+
+	gitWorkflow: {
+		preferredSurface: "git-mcp-server"
+
+		commands: [
+			{
+				run:     "git-mcp-server.git_status"
+				purpose: "Inspect repository status before staging or committing."
+			},
+			{
+				run:     "git-mcp-server.git_add"
+				purpose: "Stage user-approved paths through the MCP git surface."
+				when:    "staging is requested or required for a user-approved commit"
+			},
+			{
+				run:     "git-mcp-server.git_diff_staged"
+				purpose: "Inspect staged content before committing."
+				when:    "before creating a commit"
+			},
+			{
+				run:     "git-mcp-server.git_commit"
+				purpose: "Create the user-approved commit through the MCP git surface."
+				when:    "after staged contents and commit intent are confirmed"
+			},
+			{
+				run:     "git-mcp-server.git_status"
+				purpose: "Verify repository status after committing."
+				when:    "after creating a commit"
+			},
+		]
+
+		constraints: [
+			{
+				id:       "git-workflow-mcp-stage-commit"
+				title:    "Use MCP for staging and commits"
+				severity: "required"
+				appliesTo: ["staging", "committing", "git workflow"]
+				statement: "Use git-mcp-server for staging and committing when it is available, especially when local .git metadata is read-only or sandboxed."
+			},
+			{
+				id:       "git-workflow-status-before-commit"
+				title:    "Inspect staged contents before commit"
+				severity: "required"
+				appliesTo: ["committing"]
+				statement: "Inspect status and staged diff before creating a commit."
+			},
+			{
+				id:       "git-workflow-user-approved-commit"
+				title:    "Commit only approved work"
+				severity: "required"
+				appliesTo: ["committing"]
+				statement: "Commit only user-approved staged changes and do not stage unrelated work."
+			},
+			{
+				id:       "git-workflow-no-repo-git-mutation"
+				title:    "repo-git remains read-only"
+				severity: "forbidden"
+				appliesTo: ["repo-git", "committing", "staging"]
+				statement: "Do not extend repo-git into a staging or commit adapter."
 			},
 		]
 	}

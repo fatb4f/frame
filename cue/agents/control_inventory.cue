@@ -22,18 +22,18 @@ package agents
 	owner:   #ControlOwner
 	purpose: string
 
-	paths?:    [...string]
+	paths?: [...string]
 	commands?: [...string]
-	cueRefs?:  [...string]
+	cueRefs?: [...string]
 
-	mayDecide?:     [...string]
+	mayDecide?: [...string]
 	mustNotDecide?: [...string]
 
-	mayWrite?:     [...string]
+	mayWrite?: [...string]
 	mustNotWrite?: [...string]
 
 	evidenceProduced?: [...string]
-	gatesFed?:         [...string]
+	gatesFed?: [...string]
 }
 
 #GateMechanism: {
@@ -44,8 +44,8 @@ package agents
 	cueRef?:  string
 
 	validates: [...string]
-	inputs:    [...string]
-	outputs:   [...string]
+	inputs: [...string]
+	outputs: [...string]
 
 	failureMeaning: string
 }
@@ -334,10 +334,17 @@ package agents
 			id:      "git-mcp-server"
 			role:    "adapter"
 			owner:   "mcp"
-			purpose: "Preferred live git observation adapter."
-			commands: ["git-mcp-server"]
-			evidenceProduced: ["raw MCP git observations"]
-			mustNotWrite: ["repository mutations"]
+			purpose: "Preferred live git adapter for observations and user-requested staging or commits."
+			commands: [
+				"git-mcp-server.git_status",
+				"git-mcp-server.git_diff_staged",
+				"git-mcp-server.git_add",
+				"git-mcp-server.git_commit",
+			]
+			cueRefs: ["#GitWorkflowContract"]
+			mayWrite: ["git index", "git commits"]
+			evidenceProduced: ["raw MCP git observations", "commit result"]
+			mustNotWrite: ["repository content outside user-approved staged changes"]
 		},
 		{
 			id:      "mcp-ripgrep"
@@ -358,7 +365,7 @@ package agents
 			cueRefs: ["#FallbackAdapterFacts"]
 			evidenceProduced: ["fallback git observations"]
 			mustNotDecide: ["adapter lifecycle facts", "replacement target"]
-			mustNotWrite: ["repository mutations"]
+			mustNotWrite: ["git index", "git commits", "repository mutations"]
 		},
 		{
 			id:      "repo-rg"
@@ -543,6 +550,7 @@ package agents
 		"Shell owns mechanics only.",
 		"Shell controllers must not decide policy or semantic projection.",
 		"MCP is preferred for repo observations.",
+		"git-mcp-server is the preferred surface for user-requested staging and commits.",
 		"repo-git and repo-rg are bounded fallback adapters only.",
 		"Generated schemas are adapter inputs, not policy authority.",
 		"Markdown is a bootstrap pointer only.",

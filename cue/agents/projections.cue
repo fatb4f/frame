@@ -8,11 +8,14 @@ import adapters "github.com/fatb4f/cuerail/cue/adapters:cuerail"
 
 #ObservationPolicy: #AgentContract.observation
 
+#GitWorkflowContract: #AgentContract.gitWorkflow
+
 #ValidationContract: #AgentContract.validation
 
 #ForbiddenConstraints: [
 	for group in [
 		#AgentContract.observation.constraints,
+		#AgentContract.gitWorkflow.constraints,
 		#AgentContract.turnStart.constraints,
 		#AgentContract.hookManifest.constraints,
 		#AgentContract.validation.constraints,

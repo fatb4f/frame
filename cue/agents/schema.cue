@@ -57,6 +57,12 @@ package agents
 	constraints: [...#Constraint]
 }
 
+#GitWorkflow: {
+	preferredSurface: string
+	commands: [...#Command]
+	constraints: [...#Constraint]
+}
+
 #AgentContract: {
 	id:      string
 	purpose: string
@@ -77,6 +83,7 @@ package agents
 
 	authorityBoundaries: [...#AuthorityBoundary]
 	observation: #ObservationPolicy
+	gitWorkflow: #GitWorkflow
 
 	turnStart: {
 		commands: [...#Command]
