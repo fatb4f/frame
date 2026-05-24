@@ -4,6 +4,7 @@ import hooks "github.com/fatb4f/cuerail/cue/generated/hooks"
 
 hookInput: {
 	hook_event_name!: #CodexHookEvent
+	...
 }
 
 _hookInput: hookInput
@@ -50,153 +51,126 @@ _awarenessResults: awarenessResults
 #McpEvidenceTool: "mcp-ripgrep" | "git-mcp-server"
 
 #SessionStartHookManifest: {
-	input: hooks.#SessionStartCommandInput & _hookInput
+	_hookInputValue: hooks.#SessionStartCommandInput & _hookInput
+	input:           _hookInputValue
 	awareness: {
 		plan:    #SessionStartAwarenessPlan
 		results: _awarenessResults
 	}
 	output: hooks.#SessionStartCommandOutput
-	capture: #CaptureDecision & {
-		persist:   true
-		eventSlug: "session-start"
-		fileStem:  eventSlug
-	}
+	capture: #CaptureDecisionForEvent.SessionStart
 }
 
 #UserPromptSubmitHookManifest: {
-	input: hooks.#UserPromptSubmitCommandInput & _hookInput
+	_hookInputValue: hooks.#UserPromptSubmitCommandInput & _hookInput
+	input:           _hookInputValue
 	awareness: {
 		plan:    #UserPromptSubmitAwarenessPlan
 		results: _awarenessResults
 	}
 	output: hooks.#UserPromptSubmitCommandOutput
-	capture: #CaptureDecision & {
-		persist:   true
-		eventSlug: "user-prompt-submit"
-		fileStem:  eventSlug
-	}
+	capture: #CaptureDecisionForEvent.UserPromptSubmit
 }
 
 #PreToolUseHookManifest: {
-	input: hooks.#PreToolUseCommandInput & _hookInput
+	_hookInputValue: hooks.#PreToolUseCommandInput & _hookInput
+	input:           _hookInputValue
 	awareness: {
 		plan:    #PreToolUseAwarenessPlan
 		results: _awarenessResults
 	}
 	output: hooks.#PreToolUseCommandOutput
-	capture: #CaptureDecision & {
-		persist:   true
-		eventSlug: "pre-tool-use"
-		fileStem:  eventSlug
-	}
+	capture: #CaptureDecisionForEvent.PreToolUse
 }
 
 #PermissionRequestHookManifest: {
-	input: hooks.#PermissionRequestCommandInput & _hookInput
+	_hookInputValue: hooks.#PermissionRequestCommandInput & _hookInput
+	input:           _hookInputValue
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "PermissionRequest"}
 		results: _awarenessResults
 	}
 	output: hooks.#PermissionRequestCommandOutput
-	capture: #CaptureDecision & {
-		persist:   false
-		eventSlug: "permission-request"
-		fileStem:  eventSlug
-	}
+	capture: #CaptureDecisionForEvent.PermissionRequest
 }
 
 #PostToolUseHookManifest: {
-	input: hooks.#PostToolUseCommandInput & _hookInput
+	_hookInputValue: hooks.#PostToolUseCommandInput & _hookInput
+	input:           _hookInputValue
 	awareness: {
 		plan:    #PostToolUseAwarenessPlan
 		results: _awarenessResults
 	}
 	output: hooks.#PostToolUseCommandOutput
-	capture: #CaptureDecision & {
-		eventSlug: "post-tool-use"
+	capture: #CaptureDecisionForEvent.PostToolUse & {
 		if input.tool_name == "mcp-ripgrep" {
-			persist:  true
+			persist:  #CapturePolicy.persist.postToolUse."mcp-ripgrep"
 			toolSlug: "mcp-ripgrep"
-			fileStem: "\(eventSlug).\(toolSlug)"
+			fileStem: "\(#CapturePolicy.eventSlugs.PostToolUse).\(toolSlug)"
 		}
 		if input.tool_name == "git-mcp-server" {
-			persist:  true
+			persist:  #CapturePolicy.persist.postToolUse."git-mcp-server"
 			toolSlug: "git-mcp-server"
-			fileStem: "\(eventSlug).\(toolSlug)"
+			fileStem: "\(#CapturePolicy.eventSlugs.PostToolUse).\(toolSlug)"
 		}
 		if input.tool_name != "mcp-ripgrep" && input.tool_name != "git-mcp-server" {
-			persist: false
-			fileStem: eventSlug
+			persist: #CapturePolicy.persist.events.PostToolUse
+			fileStem: #CapturePolicy.eventSlugs.PostToolUse
 		}
 	}
 }
 
 #PreCompactHookManifest: {
-	input: hooks.#PreCompactCommandInput & _hookInput
+	_hookInputValue: hooks.#PreCompactCommandInput & _hookInput
+	input:           _hookInputValue
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "PreCompact"}
 		results: _awarenessResults
 	}
 	output: hooks.#PreCompactCommandOutput
-	capture: #CaptureDecision & {
-		persist:   false
-		eventSlug: "pre-compact"
-		fileStem:  eventSlug
-	}
+	capture: #CaptureDecisionForEvent.PreCompact
 }
 
 #PostCompactHookManifest: {
-	input: hooks.#PostCompactCommandInput & _hookInput
+	_hookInputValue: hooks.#PostCompactCommandInput & _hookInput
+	input:           _hookInputValue
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "PostCompact"}
 		results: _awarenessResults
 	}
 	output: hooks.#PostCompactCommandOutput
-	capture: #CaptureDecision & {
-		persist:   false
-		eventSlug: "post-compact"
-		fileStem:  eventSlug
-	}
+	capture: #CaptureDecisionForEvent.PostCompact
 }
 
 #SubagentStartHookManifest: {
-	input: hooks.#SubagentStartCommandInput & _hookInput
+	_hookInputValue: hooks.#SubagentStartCommandInput & _hookInput
+	input:           _hookInputValue
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "SubagentStart"}
 		results: _awarenessResults
 	}
 	output: hooks.#SubagentStartCommandOutput
-	capture: #CaptureDecision & {
-		persist:   false
-		eventSlug: "subagent-start"
-		fileStem:  eventSlug
-	}
+	capture: #CaptureDecisionForEvent.SubagentStart
 }
 
 #SubagentStopHookManifest: {
-	input: hooks.#SubagentStopCommandInput & _hookInput
+	_hookInputValue: hooks.#SubagentStopCommandInput & _hookInput
+	input:           _hookInputValue
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "SubagentStop"}
 		results: _awarenessResults
 	}
 	output: hooks.#SubagentStopCommandOutput
-	capture: #CaptureDecision & {
-		persist:   false
-		eventSlug: "subagent-stop"
-		fileStem:  eventSlug
-	}
+	capture: #CaptureDecisionForEvent.SubagentStop
 }
 
 #StopHookManifest: {
-	input: hooks.#StopCommandInput & _hookInput
+	_hookInputValue: hooks.#StopCommandInput & _hookInput
+	input:           _hookInputValue
 	awareness: {
 		plan:    #StopAwarenessPlan
 		results: _awarenessResults
 	}
 	output: hooks.#StopCommandOutput
-	capture: #CaptureDecision & {
-		persist:   true
-		eventSlug: "stop"
-		fileStem:  eventSlug
-	}
+	capture: #CaptureDecisionForEvent.Stop
 }

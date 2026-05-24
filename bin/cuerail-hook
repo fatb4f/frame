@@ -14,6 +14,7 @@ cleanup_temp_files() {
   [ -n "${results_json:-}" ] && rm -f "$results_json"
   [ -n "${output_json:-}" ] && rm -f "$output_json"
   [ -n "${persist_json:-}" ] && rm -f "$persist_json"
+  [ -n "${file_stem_json:-}" ] && rm -f "$file_stem_json"
   [ -n "${manifest_cue:-}" ] && rm -f "$manifest_cue"
   return 0
 }
@@ -106,30 +107,6 @@ execute_awareness_plan() {
   mv "$tmp_results" "$results"
 }
 
-event_slug() {
-  case "$1" in
-    UserPromptSubmit)
-      printf 'user-prompt-submit'
-      ;;
-    Stop)
-      printf 'stop'
-      ;;
-    PostToolUse)
-      case "$2" in
-        mcp-ripgrep|git-mcp-server)
-          printf 'post-tool-use.%s' "$2"
-          ;;
-        *)
-          printf 'post-tool-use'
-          ;;
-      esac
-      ;;
-    *)
-      printf '%s' "$1" | sed 's/\([a-z0-9]\)\([A-Z]\)/\1-\2/g' | tr '[:upper:]' '[:lower:]'
-      ;;
-  esac
-}
-
 : "${CODEX_HOME:?CODEX_HOME is required}"
 : "${CODEX_STATE:?CODEX_STATE is required}"
 : "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"
@@ -155,6 +132,7 @@ plan_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-plan.XXXXXX.json")
 results_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-results.XXXXXX.json")
 output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-output.XXXXXX.json")
 persist_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-persist.XXXXXX.json")
+file_stem_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-hook-file-stem.XXXXXX.json")
 manifest_cue=
 trap cleanup_temp_files EXIT HUP INT TERM
 
@@ -176,7 +154,8 @@ if (
   (
     cd "$CUERAIL_HOME" &&
     cue export ./cue/runtime "$wrapped_with_results_json" -e '#HookManifest.output' >"$output_json" &&
-    cue export ./cue/runtime "$wrapped_with_results_json" -e '#HookManifest.capture.persist' >"$persist_json"
+    cue export ./cue/runtime "$wrapped_with_results_json" -e '#HookManifest.capture.persist' >"$persist_json" &&
+    cue export ./cue/runtime "$wrapped_with_results_json" -e '#HookManifest.capture.fileStem' >"$file_stem_json"
   ) || die "could not export hook output"
 
   persist=$(jq -r 'if . == true then "true" else "false" end' "$persist_json") ||
@@ -191,7 +170,9 @@ if (
 
     safe_session=$(safe_component "$session_id")
     safe_turn=$(safe_component "$turn_id")
-    slug=$(event_slug "$event_name" "$tool_name")
+    slug=$(jq -r '. // empty' "$file_stem_json") || die "invalid capture fileStem output"
+    [ -n "$slug" ] || die "persisted hook missing capture fileStem"
+    slug=$(safe_component "$slug")
     turn_dir="$CUERAIL_TURNS/$safe_session/$safe_turn"
     events_dir="$turn_dir/events"
 
