@@ -33,6 +33,7 @@ package cuerail
 	op!:        string
 	input!:     _
 	raw?:       _
+	rawText?:   string
 	error?:     string
 	status!:    #ReadStatus
 }

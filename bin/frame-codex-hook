@@ -42,16 +42,42 @@ execute_awareness_plan() {
 
     if [ -n "${CUERAIL_MCP_READ_EXECUTOR:-}" ]; then
       if "$CUERAIL_MCP_READ_EXECUTOR" "$op_file" >"$raw_file" 2>"$err_file"; then
-        jq -n --slurpfile op "$op_file" --rawfile raw "$raw_file" '
-          {
-            id: $op[0].id,
-            status: "ok",
-            substrate: $op[0].substrate,
-            tool: $op[0].tool,
-            op: $op[0].op,
-            input: $op[0].input,
-            raw: $raw
-          }' >"$env_file"
+        if jq -e . "$raw_file" >/dev/null 2>&1; then
+          jq -n --slurpfile op "$op_file" --slurpfile raw "$raw_file" '
+            if ($raw | length) == 1 then
+              {
+                id: $op[0].id,
+                status: "ok",
+                substrate: $op[0].substrate,
+                tool: $op[0].tool,
+                op: $op[0].op,
+                input: $op[0].input,
+                raw: $raw[0]
+              }
+            else
+              {
+                id: $op[0].id,
+                status: "error",
+                substrate: $op[0].substrate,
+                tool: $op[0].tool,
+                op: $op[0].op,
+                input: $op[0].input,
+                error: "executor stdout must contain exactly one JSON value"
+              }
+            end' >"$env_file"
+        else
+          jq -n --slurpfile op "$op_file" --rawfile rawText "$raw_file" '
+            {
+              id: $op[0].id,
+              status: "error",
+              substrate: $op[0].substrate,
+              tool: $op[0].tool,
+              op: $op[0].op,
+              input: $op[0].input,
+              rawText: $rawText,
+              error: "executor stdout was not valid JSON"
+            }' >"$env_file"
+        fi
       else
         jq -n --slurpfile op "$op_file" --rawfile error "$err_file" '
           {
