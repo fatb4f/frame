@@ -11,6 +11,8 @@ package cuerail
 		awareness!: {
 			plan!:    #AwarenessPlan
 			results!: [...#ReadResultEnvelope]
+			executable!: bool
+			reason?:     string
 		}
 		output!:  _
 		capture!: #CaptureDecision

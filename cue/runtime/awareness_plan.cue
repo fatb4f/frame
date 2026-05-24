@@ -42,6 +42,14 @@ _schemaAuthorityRepoRoot: manifest.repos.frame.root
 	status!:    #ReadStatus
 }
 
+#MCPReadExecutor: {
+	env: "CUERAIL_MCP_READ_EXECUTOR"
+
+	request: #ReadOp
+
+	response: #ReadResultEnvelope
+}
+
 #AwarenessPlan: {
 	phase!: #CodexHookEvent
 	ops!: [...#ReadOp]
@@ -115,9 +123,10 @@ _schemaAuthorityRepoRoot: manifest.repos.frame.root
 		kind:      "git"
 		substrate: "mcp"
 		tool:      "git-mcp-server"
-		op:        "git_diff_unstaged"
+		op:        "git_diff"
 		input: {
 			repo_path: _schemaAuthorityRepoRoot
+			target:    "HEAD"
 		}
 		readOnly: true
 	}]

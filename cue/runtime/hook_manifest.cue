@@ -13,6 +13,21 @@ awarenessResults: [...#ReadResultEnvelope] | *[]
 
 _awarenessResults: awarenessResults
 
+awarenessExecutable: bool | *true
+
+_awarenessExecutable: awarenessExecutable
+
+awarenessExecutionReason?: string
+
+_awarenessExecutionReason: awarenessExecutionReason
+
+#AwarenessExecution: {
+	executable: _awarenessExecutable
+	if _awarenessExecutable == false {
+		reason: _awarenessExecutionReason
+	}
+}
+
 #HookInputByEvent: {
 	"SessionStart":      hooks.#SessionStartCommandInput
 	"UserPromptSubmit":  hooks.#UserPromptSubmitCommandInput
@@ -54,6 +69,7 @@ _awarenessResults: awarenessResults
 	awareness: {
 		plan:    #SessionStartAwarenessPlan
 		results: _awarenessResults
+		#AwarenessExecution
 	}
 	output: hooks.#SessionStartCommandOutput
 	capture: #CaptureDecisionForInput & {
@@ -67,6 +83,7 @@ _awarenessResults: awarenessResults
 	awareness: {
 		plan:    #UserPromptSubmitAwarenessPlan
 		results: _awarenessResults
+		#AwarenessExecution
 	}
 	output: hooks.#UserPromptSubmitCommandOutput
 	capture: #CaptureDecisionForInput & {
@@ -80,6 +97,7 @@ _awarenessResults: awarenessResults
 	awareness: {
 		plan:    #PreToolUseAwarenessPlan
 		results: _awarenessResults
+		#AwarenessExecution
 	}
 	output: hooks.#PreToolUseCommandOutput
 	capture: #CaptureDecisionForInput & {
@@ -93,6 +111,7 @@ _awarenessResults: awarenessResults
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "PermissionRequest"}
 		results: _awarenessResults
+		#AwarenessExecution
 	}
 	output: hooks.#PermissionRequestCommandOutput
 	capture: #CaptureDecisionForInput & {
@@ -106,6 +125,7 @@ _awarenessResults: awarenessResults
 	awareness: {
 		plan:    #PostToolUseAwarenessPlan
 		results: _awarenessResults
+		#AwarenessExecution
 	}
 	output: hooks.#PostToolUseCommandOutput
 	capture: #CaptureDecisionForInput & {
@@ -119,6 +139,7 @@ _awarenessResults: awarenessResults
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "PreCompact"}
 		results: _awarenessResults
+		#AwarenessExecution
 	}
 	output: hooks.#PreCompactCommandOutput
 	capture: #CaptureDecisionForInput & {
@@ -132,6 +153,7 @@ _awarenessResults: awarenessResults
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "PostCompact"}
 		results: _awarenessResults
+		#AwarenessExecution
 	}
 	output: hooks.#PostCompactCommandOutput
 	capture: #CaptureDecisionForInput & {
@@ -145,6 +167,7 @@ _awarenessResults: awarenessResults
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "SubagentStart"}
 		results: _awarenessResults
+		#AwarenessExecution
 	}
 	output: hooks.#SubagentStartCommandOutput
 	capture: #CaptureDecisionForInput & {
@@ -158,6 +181,7 @@ _awarenessResults: awarenessResults
 	awareness: {
 		plan:    #NoAwarenessPlan & {phase: "SubagentStop"}
 		results: _awarenessResults
+		#AwarenessExecution
 	}
 	output: hooks.#SubagentStopCommandOutput
 	capture: #CaptureDecisionForInput & {
@@ -171,6 +195,7 @@ _awarenessResults: awarenessResults
 	awareness: {
 		plan:    #StopAwarenessPlan
 		results: _awarenessResults
+		#AwarenessExecution
 	}
 	output: hooks.#StopCommandOutput
 	capture: #CaptureDecisionForInput & {

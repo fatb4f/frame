@@ -59,6 +59,7 @@ include_only = [
   "CUERAIL_BIN",
   "CUERAIL_STATE",
   "CUERAIL_TURNS",
+  "CUERAIL_MCP_READ_EXECUTOR",
 ]
 exclude = [
   "*TOKEN*",
@@ -74,6 +75,7 @@ CUERAIL_HOME = "/home/_404/.local/share/codex/tools/cuerail"
 CUERAIL_BIN = "/home/_404/.local/share/codex/tools/cuerail/bin"
 CUERAIL_STATE = "/home/_404/.local/state/codex/cuerail"
 CUERAIL_TURNS = "/home/_404/.local/share/codex/tools/cuerail/.cuerail/runs"
+CUERAIL_MCP_READ_EXECUTOR = "/home/_404/.local/share/codex/tools/cuerail/bin/cuerail-mcp-read-executor"
 TOOL_PATH_HOME = "/home/_404/.local/share/path"
 PATH = "/home/_404/.local/share/codex/tools/cuerail/bin:/home/_404/.local/share/codex/bin:/home/_404/.local/share/path:/home/_404/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/bin"
 

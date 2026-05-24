@@ -91,6 +91,10 @@ repo_layout: {
 					to:   "hooks/runtime/bin/cuerail-hook"
 				},
 				{
+					from: "bin/cuerail-mcp-read-executor"
+					to:   "hooks/runtime/bin/cuerail-mcp-read-executor"
+				},
+				{
 					from: "codex/config.toml"
 					to:   "hooks/runtime/codex/config.toml"
 				},
