@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+set -eu
+
+case "$0" in
+  */*) script_dir=${0%/*} ;;
+  *)
+    script_path=$(command -v "$0")
+    script_dir=${script_path%/*}
+    ;;
+esac
+
+exec "$script_dir/cuerail-git-mcp-go" "$@"

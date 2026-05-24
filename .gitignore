@@ -2,6 +2,7 @@
 *.tmp
 *.log
 .cache/
+cache/
 .out/
 frames/
 cue/generated/hooks/*.cue

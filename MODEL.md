@@ -158,13 +158,12 @@ but the slice-1 runtime product is the CUE-valid manifest set.
 ## Superseded model references
 
 The previous model used old names and shell/Python adapter ideas. These terms are
-not active model names:
+not active model names. `repo-git` and `repo-rg` remain only as temporary
+worktree-local fallback adapters until MCP capture adapters replace them:
 
 ```txt
 frame
 repo-frame
-repo-rg
-repo-git
 FRAME_HOME
 frame-codex-hook
 frame-doctor

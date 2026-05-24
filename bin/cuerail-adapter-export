@@ -1,0 +1,63 @@
+#!/usr/bin/env sh
+set -eu
+
+die() {
+  printf 'cuerail-adapter-export: %s\n' "$1" >&2
+  exit 1
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+usage() {
+  printf 'usage: cuerail-adapter-export git-mcp-go\n' >&2
+  exit 2
+}
+
+[ "$#" -eq 1 ] || usage
+[ "$1" = "git-mcp-go" ] || usage
+
+case "$0" in
+  */*) script_dir=${0%/*} ;;
+  *)
+    script_path=$(command -v "$0") || die "cannot locate script"
+    script_dir=${script_path%/*}
+    ;;
+esac
+
+CUERAIL_HOME="${CUERAIL_HOME:-$(cd "$script_dir/.." 2>/dev/null && pwd -P)}"
+CUERAIL_CACHE="${CUERAIL_CACHE:-$CUERAIL_HOME/cache}"
+
+[ -d "$CUERAIL_HOME/cue" ] || die "missing active CUE package: $CUERAIL_HOME/cue"
+
+need cue
+need jq
+need mkdir
+need mktemp
+need mv
+need rm
+
+out_dir="$CUERAIL_CACHE/mcp/git-mcp-go"
+out_file="$out_dir/adapter.json"
+tmp=$(mktemp "${TMPDIR:-/tmp}/cuerail-git-mcp-go-adapter.XXXXXX.json")
+trap 'rm -f "$tmp"' EXIT HUP INT TERM
+
+(
+  cd "$CUERAIL_HOME"
+  cue export ./cue/adapters -e '#GitMCPGoAdapter' --out json
+) >"$tmp"
+
+jq -e '
+  .mode == "shell" and
+  .autoApprove == "allow-read-only" and
+  (.repos | type == "array") and
+  (.repoRoots | type == "array") and
+  (.repoRoots | length > 0)
+' "$tmp" >/dev/null || die "invalid git-mcp-go adapter projection"
+
+mkdir -p "$out_dir"
+mv "$tmp" "$out_file"
+trap - EXIT HUP INT TERM
+
+printf '%s\n' "$out_file"

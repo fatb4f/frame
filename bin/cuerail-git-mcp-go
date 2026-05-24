@@ -1,0 +1,51 @@
+#!/usr/bin/env sh
+set -eu
+
+die() {
+  printf 'cuerail-git-mcp-go: %s\n' "$1" >&2
+  exit 1
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+usage() {
+  printf 'usage: cuerail-git-mcp-go\n' >&2
+  exit 2
+}
+
+[ "$#" -eq 0 ] || usage
+
+case "$0" in
+  */*) script_dir=${0%/*} ;;
+  *)
+    script_path=$(command -v "$0") || die "cannot locate script"
+    script_dir=${script_path%/*}
+    ;;
+esac
+
+CUERAIL_HOME="${CUERAIL_HOME:-$(cd "$script_dir/.." 2>/dev/null && pwd -P)}"
+CUERAIL_CACHE="${CUERAIL_CACHE:-$CUERAIL_HOME/cache}"
+config="${CUERAIL_GIT_MCP_GO_ADAPTER:-$CUERAIL_CACHE/mcp/git-mcp-go/adapter.json}"
+
+[ -f "$config" ] ||
+  die "missing adapter artifact: run cuerail-adapter-export git-mcp-go"
+
+need jq
+need git-mcp-go
+
+mode=$(jq -r '.mode' "$config")
+auto_approve=$(jq -r '.autoApprove' "$config")
+repo_arg=$(jq -r '.repoRoots | join(",")' "$config")
+
+[ "$mode" = "shell" ] || die "unsupported mode in adapter artifact: $mode"
+[ -n "$auto_approve" ] && [ "$auto_approve" != "null" ] ||
+  die "missing autoApprove in adapter artifact"
+[ -n "$repo_arg" ] && [ "$repo_arg" != "null" ] ||
+  die "missing repoRoots in adapter artifact"
+
+exec git-mcp-go serve \
+  --mode "$mode" \
+  --auto-approve="$auto_approve" \
+  -r="$repo_arg"

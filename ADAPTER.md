@@ -199,7 +199,9 @@ classification or promotion logic
 ## Superseded adapter references
 
 The previous adapter proposal used these names and responsibilities. They are
-superseded history, not active adapter design:
+superseded history, not active adapter design. `repo-git` and `repo-rg` remain
+only as temporary worktree-local fallback adapters until `git-mcp-server` and
+`mcp-ripgrep` replace them:
 
 ```txt
 frame-codex-hook
@@ -209,6 +211,4 @@ Python-owned hook adapter
 collectGit(opts)
 collectRg(opts)
 repo-frame
-repo-rg
-repo-git
 ```

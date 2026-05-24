@@ -209,13 +209,13 @@ schema cache/import availability via cuerail-schema-sync --check
 ## Superseded names
 
 The previous contract used these names and concepts. They are migration history,
-not the active contract:
+not the active contract. `repo-git` and `repo-rg` are exceptions: they remain
+temporary worktree-local fallback adapters until `git-mcp-server` and
+`mcp-ripgrep` own capture.
 
 ```txt
 frame
 repo-frame
-repo-rg
-repo-git
 noMCP
 FRAME_HOME
 frame-codex-hook

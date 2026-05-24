@@ -11,21 +11,21 @@ surface.
 Use the current Cuerail tools and schemas:
 
 ```txt
-cuerail/bin/cuerail-hook
-cuerail/bin/cuerail-doctor
-cuerail/bin/cuerail-schema-sync
-cuerail/bin/repo-git
-cuerail/bin/repo-rg
+bin/cuerail-hook
+bin/cuerail-doctor
+bin/cuerail-schema-sync
+bin/repo-git
+bin/repo-rg
 cue/runtime/*
 fixtures/*
 ```
 
-`repo-git` and `repo-rg` are allowed interim local adapters until the target MCP
-servers are running:
+`repo-git` and `repo-rg` are temporary worktree-local fallback adapters until the
+target MCP servers are running. They are not canonical repo/search interfaces:
 
 ```txt
-repo-git       -> interim adapter for git observations
-repo-rg        -> interim adapter for bounded ripgrep observations
+repo-git       -> temporary shell fallback for git observations
+repo-rg        -> temporary shell fallback for bounded ripgrep observations
 
 git-mcp-server -> target git observation surface
 mcp-ripgrep    -> target bounded search surface
@@ -59,28 +59,34 @@ There is no current durable frame runtime and no active `#ContextFrame` contract
 At the start of repo-aware work, prefer bounded local inspection through the
 current Cuerail adapter surface.
 
-Set the repo-local tool path explicitly:
+Set the repo-local tool path explicitly from the active worktree:
 
 ```sh
-PATH="$PWD/cuerail/bin:$PATH"
+PATH="$PWD/bin:$PATH"
 ```
 
-Check repository state:
+Check repository state through the typed fallback adapter:
 
 ```sh
-repo-git status --short
-repo-git diff --stat
+repo-git status .
+repo-git diff .
 ```
+
+Do not treat `repo-git` as a git-compatible argv passthrough. Do not pass raw
+git flags such as `--short` or `--stat`; parse the JSON returned by `repo-git`
+when a compact summary is needed.
 
 For exact code, symbols, config keys, filenames, or strings, use bounded search:
 
 ```sh
-repo-rg 'literal text' literal 80
-repo-rg 'regex_pattern' regex 80
+repo-rg 'literal text' . literal 80
+repo-rg 'regex_pattern' . regex 80
 ```
 
-Use direct shell tools only when the Cuerail adapter surface does not yet expose
-the required observation.
+Do not expand `repo-git` or `repo-rg` beyond the minimum needed for current
+Cuerail checks. If more repo/search capability is needed, add it to the MCP
+capture adapter path, not to these fallback scripts. Use direct shell tools only
+when the Cuerail adapter surface does not yet expose the required observation.
 
 ## Hook / Manifest Contract
 
@@ -210,10 +216,10 @@ CUE work:
   inspect cue/runtime and current schema-sync/doctor fixtures
 
 Git evidence:
-  use cuerail/bin/repo-git as interim adapter
+  use bin/repo-git as temporary fallback adapter
 
 Search evidence:
-  use cuerail/bin/repo-rg as interim adapter
+  use bin/repo-rg as temporary fallback adapter
 
 Hook behavior:
   use cuerail-hook, cuerail-doctor, fixtures, and #HookManifest
@@ -293,7 +299,7 @@ workflows/frame/skills/*
 It is acceptable for `repo-git` and `repo-rg` to survive under:
 
 ```txt
-cuerail/bin/
+bin/
 ```
 
 as interim adapters.

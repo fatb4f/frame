@@ -99,6 +99,9 @@ esac
 [ -x "$CUERAIL_HOME/bin/cuerail-hook" ] || die "missing executable bin/cuerail-hook"
 [ -x "$CUERAIL_HOME/bin/cuerail-doctor" ] || die "missing executable bin/cuerail-doctor"
 [ -x "$CUERAIL_HOME/bin/cuerail-schema-sync" ] || die "missing executable bin/cuerail-schema-sync"
+[ -x "$CUERAIL_HOME/bin/cuerail-adapter-export" ] || die "missing executable bin/cuerail-adapter-export"
+[ -x "$CUERAIL_HOME/bin/cuerail-git-mcp-go" ] || die "missing executable bin/cuerail-git-mcp-go"
+[ -x "$CUERAIL_HOME/bin/git-mcp-go-cuerail" ] || die "missing executable bin/git-mcp-go-cuerail"
 [ -d "$CUERAIL_HOME/cue" ] || die "missing active CUE package"
 
 need cue
@@ -129,8 +132,11 @@ expected_persisted_count=0
 
 (
   cd "$CUERAIL_HOME"
+  cue vet -c=false ./cue
+  cue vet -c=false ./cue/adapters
   cue vet -c=false ./cue/runtime
   cue vet -c=false ./cue/sync
+  cue export ./cue/adapters -e '#GitMCPGoAdapter' >/dev/null
   cue export ./cue/sync -e '#ExpectedHookSchemaFiles' >/dev/null
   cue export ./cue/sync -e '#SchemaSync' >/dev/null
   cue export ./cue/sync -e '#ExampleSchemaLock' >/dev/null
@@ -139,6 +145,16 @@ expected_persisted_count=0
   cue export ./cue/runtime -e '#ExamplePostToolUseHookOutput' >/dev/null
   cue export ./cue/runtime -e '#ExampleStopHookOutput' >/dev/null
 )
+
+CUERAIL_CACHE="$doctor_fixture_state/cache" "$CUERAIL_HOME/bin/cuerail-adapter-export" git-mcp-go >/dev/null
+[ -f "$doctor_fixture_state/cache/mcp/git-mcp-go/adapter.json" ] ||
+  die "missing exported git-mcp-go adapter artifact"
+jq -e '
+  .mode == "shell" and
+  .autoApprove == "allow-read-only" and
+  (.repoRoots | length) == 3
+' "$doctor_fixture_state/cache/mcp/git-mcp-go/adapter.json" >/dev/null ||
+  die "invalid exported git-mcp-go adapter artifact"
 
 for fixture in "$CUERAIL_HOME"/test/fixtures/hooks/*.json; do
   [ -f "$fixture" ] || continue
