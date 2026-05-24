@@ -101,6 +101,7 @@ cleanup_temp_files() {
   [ -n "${expected_git_fixture_paths:-}" ] && rm -f "$expected_git_fixture_paths"
   [ -n "${actual_git_fixture_paths:-}" ] && rm -f "$actual_git_fixture_paths"
   [ -n "${manifest_json:-}" ] && rm -f "$manifest_json"
+  [ -n "${review_packet_json:-}" ] && rm -f "$review_packet_json"
   [ -n "${doctor_fixture_state:-}" ] && rm -rf "$doctor_fixture_state"
   return 0
 }
@@ -185,6 +186,7 @@ CUERAIL_HOME="${CUERAIL_HOME:-$(resolve_source_home)}"
 [ ! -L "$CUERAIL_HOME" ] || die "CUERAIL_HOME must not be a symlink"
 [ -x "$CUERAIL_HOME/bin/cuerail-hook" ] || die "missing executable bin/cuerail-hook"
 [ -x "$CUERAIL_HOME/bin/cuerail-doctor" ] || die "missing executable bin/cuerail-doctor"
+[ -x "$CUERAIL_HOME/bin/cuerail-review-packet" ] || die "missing executable bin/cuerail-review-packet"
 [ -x "$CUERAIL_HOME/bin/cuerail-schema-sync" ] || die "missing executable bin/cuerail-schema-sync"
 [ -x "$CUERAIL_HOME/bin/cuerail-adapter-export" ] || die "missing executable bin/cuerail-adapter-export"
 [ -x "$CUERAIL_HOME/bin/cuerail-mcp-ripgrep" ] || die "missing executable bin/cuerail-mcp-ripgrep"
@@ -236,6 +238,16 @@ expected_persisted_count=0
   cue export ./cue/runtime -e '#ExampleGitRepoStagedDiffCapture' >/dev/null
   cue export ./cue/runtime -e '#ExampleGitRepoLogCapture' >/dev/null
 )
+
+review_packet_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-review-packet.XXXXXX.json")
+CUERAIL_REVIEW_PACKET_SKIP_SOURCE_DOCTOR=1 "$CUERAIL_HOME/bin/cuerail-review-packet" >"$review_packet_json"
+jq -e . "$review_packet_json" >/dev/null
+(
+  cd "$CUERAIL_HOME"
+  cue vet -c=false ./cue/runtime "$review_packet_json" -d '#ReviewPacket'
+) || die "invalid review packet output"
+rm -f "$review_packet_json"
+review_packet_json=
 
 mcp_adapter_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-mcp-ripgrep-adapter.XXXXXX.json")
 (

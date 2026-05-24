@@ -1,0 +1,166 @@
+#!/usr/bin/env sh
+set -eu
+LC_ALL=C
+export LC_ALL
+
+die() {
+  printf 'cuerail-review-packet: %s\n' "$1" >&2
+  exit 1
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+usage() {
+  printf 'usage: cuerail-review-packet [--runtime] [commit]\n' >&2
+  exit 2
+}
+
+resolve_source_home() {
+  case "$0" in
+    */*) script_dir=${0%/*} ;;
+    *)
+      script_path=$(command -v "$0") || die "cannot locate script"
+      script_dir=${script_path%/*}
+      ;;
+  esac
+
+  cd "$script_dir/.." 2>/dev/null && pwd -P
+}
+
+status_check() {
+  if "$@" >/dev/null 2>&1; then
+    printf 'ok'
+  else
+    printf 'failed'
+  fi
+}
+
+runtime_requested=false
+commit=HEAD
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --runtime)
+      runtime_requested=true
+      shift
+      ;;
+    -h|--help)
+      usage
+      ;;
+    -*)
+      usage
+      ;;
+    *)
+      [ "$commit" = "HEAD" ] || usage
+      commit=$1
+      shift
+      ;;
+  esac
+done
+
+case "${CUERAIL_REVIEW_RUNTIME:-}" in
+  1|true|yes) runtime_requested=true ;;
+esac
+
+CUERAIL_HOME="${CUERAIL_HOME:-$(resolve_source_home)}"
+[ -d "$CUERAIL_HOME" ] || die "missing CUERAIL_HOME: $CUERAIL_HOME"
+
+need git
+need jq
+
+commit_sha=$(git -C "$CUERAIL_HOME" rev-parse --verify "$commit^{commit}") ||
+  die "unknown commit: $commit"
+parent_sha=$(git -C "$CUERAIL_HOME" rev-parse --verify "$commit_sha^" 2>/dev/null || true)
+subject=$(git -C "$CUERAIL_HOME" show -s --format=%s "$commit_sha")
+
+changed_files_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-files.XXXXXX.json")
+line_stats_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-stats.XXXXXX.json")
+notes_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-notes.XXXXXX.json")
+trap 'rm -f "$changed_files_json" "$line_stats_json" "$notes_json"' EXIT HUP INT TERM
+
+git -C "$CUERAIL_HOME" diff-tree -z --root --no-commit-id --name-only -r "$commit_sha" |
+  jq -R -s 'split("\u0000") | map(select(length > 0))' >"$changed_files_json"
+
+git -C "$CUERAIL_HOME" show -z --format= --numstat "$commit_sha" |
+  jq -R -s '
+    split("\u0000") |
+    map(select(length > 0) | split("\t") | {
+      path: .[2],
+      added: (if .[0] == "-" then null else (.[0] | tonumber) end),
+      deleted: (if .[1] == "-" then null else (.[1] | tonumber) end)
+    })
+  ' >"$line_stats_json"
+
+printf '[]\n' >"$notes_json"
+
+if [ "${CUERAIL_REVIEW_PACKET_SKIP_SOURCE_DOCTOR:-}" = "1" ]; then
+  source_doctor_status=skipped
+  notes_json_tmp=$notes_json.tmp
+  jq '. + ["source doctor skipped by CUERAIL_REVIEW_PACKET_SKIP_SOURCE_DOCTOR"]' "$notes_json" >"$notes_json_tmp"
+  mv "$notes_json_tmp" "$notes_json"
+else
+  source_doctor_status=$(status_check env CUERAIL_REVIEW_PACKET_SKIP_SOURCE_DOCTOR=1 "$CUERAIL_HOME/bin/cuerail-doctor" source)
+fi
+
+cue_vet_status=skipped
+if command -v cue >/dev/null 2>&1; then
+  cue_vet_status=$(status_check sh -c 'cd "$1" && cue vet -c=false ./cue' sh "$CUERAIL_HOME")
+else
+  notes_json_tmp=$notes_json.tmp
+  jq '. + ["cue vet skipped because cue is not available"]' "$notes_json" >"$notes_json_tmp"
+  mv "$notes_json_tmp" "$notes_json"
+fi
+
+schema_sync_status=skipped
+if [ -n "${CODEX_HOME:-}" ] && [ -n "${CODEX_STATE:-}" ] && command -v codex >/dev/null 2>&1; then
+  schema_sync_status=$(status_check "$CUERAIL_HOME/bin/cuerail-schema-sync" --check)
+else
+  notes_json_tmp=$notes_json.tmp
+  jq '. + ["schema-sync skipped because CODEX_HOME/CODEX_STATE or codex is unavailable"]' "$notes_json" >"$notes_json_tmp"
+  mv "$notes_json_tmp" "$notes_json"
+fi
+
+runtime_doctor_status=skipped
+if [ "$runtime_requested" = "true" ]; then
+  runtime_doctor_status=$(status_check "$CUERAIL_HOME/bin/cuerail-doctor" runtime)
+else
+  notes_json_tmp=$notes_json.tmp
+  jq '. + ["runtime doctor skipped by default"]' "$notes_json" >"$notes_json_tmp"
+  mv "$notes_json_tmp" "$notes_json"
+fi
+
+jq -n \
+  --arg commit "$commit_sha" \
+  --arg parent "$parent_sha" \
+  --arg subject "$subject" \
+  --slurpfile changedFiles "$changed_files_json" \
+  --slurpfile lineStats "$line_stats_json" \
+  --arg sourceDoctor "$source_doctor_status" \
+  --arg cueVet "$cue_vet_status" \
+  --arg schemaSync "$schema_sync_status" \
+  --arg runtimeDoctor "$runtime_doctor_status" \
+  --slurpfile notes "$notes_json" \
+  '{
+    commit: $commit,
+    parent: (if $parent == "" then null else $parent end),
+    subject: $subject,
+    changedFiles: $changedFiles[0],
+    lineStats: $lineStats[0],
+    touched: {
+      bin: any($changedFiles[0][]; startswith("bin/")),
+      cue: any($changedFiles[0][]; startswith("cue/")),
+      cache: any($changedFiles[0][]; startswith("cache/")),
+      hooks: any($changedFiles[0][]; contains("hook") or startswith("test/fixtures/hooks/")),
+      schemas: any($changedFiles[0][]; contains("schema") or startswith("cue/generated/hooks/")),
+      adapters: any($changedFiles[0][]; contains("adapter") or contains("mcp") or . == "bin/repo-git" or . == "bin/repo-rg")
+    },
+    checks: {
+      sourceDoctor: $sourceDoctor,
+      cueVet: $cueVet,
+      schemaSync: $schemaSync,
+      runtimeDoctor: $runtimeDoctor
+    },
+    notes: $notes[0]
+  }'
