@@ -66,6 +66,19 @@ Keep runtime and authority separate:
 - Global Codex wiring belongs in `$CODEX_HOME/config.toml`.
 - Runtime CUE should describe runtime behavior, capture schemas, and validation shape, not active agent policy.
 
+## Git MCP Staging And Commits
+
+When staging or committing Cuerail changes, use only the git MCP server:
+
+1. Inspect repository state with `mcp__git_mcp_server__.git_status`.
+2. Inspect the exact staged or unstaged change with `mcp__git_mcp_server__.git_diff` or `mcp__git_mcp_server__.git_diff_staged`.
+3. Stage intended files with `mcp__git_mcp_server__.git_add`.
+4. Re-check staged content with `mcp__git_mcp_server__.git_diff_staged`.
+5. Commit with `mcp__git_mcp_server__.git_commit` using a concrete subject and body.
+6. Confirm the final state with `mcp__git_mcp_server__.git_status`.
+
+Do not use shell `git add`, `git diff`, `git status`, or `git commit` for Cuerail repository observation or mutation. If the git MCP surface is unavailable or missing a required operation, report the blocker instead of falling back to shell git.
+
 ## Validation
 
 For Cuerail changes, run the narrowest relevant validation:
