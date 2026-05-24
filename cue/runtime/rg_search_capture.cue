@@ -1,13 +1,13 @@
 package cuerail
 
-#RgSearchMode:        "literal" | "regex"
-#RgCaptureAdapter:    "mcp-ripgrep" | "repo-rg"
-#RgCaptureReadiness:  "green" | "yellow"
-#RgCaptureTimestamp:  =~"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
-#RgSearchStableName:  =~"^[A-Za-z0-9._-]+$"
-#RgSearchResultPath:  !~"^/" & string
-#RgSearchResultLine:  int & >=1
-#RgSearchResultText:  string
+#RgSearchMode:       "literal" | "regex"
+#RgCaptureAdapter:   "mcp-ripgrep" | "repo-rg"
+#RgCaptureReadiness: "green" | "yellow"
+#RgCaptureTimestamp: =~"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+#RgSearchStableName: =~"^[A-Za-z0-9._-]+$"
+#RgSearchResultPath: !~"^/" & string
+#RgSearchResultLine: int & >=1
+#RgSearchResultText: string
 
 #RgSearchCaptureBase: {
 	schema:     "cuerail.mcp-ripgrep.search.v1"
@@ -34,9 +34,9 @@ package cuerail
 		cacheRel: "mcp/mcp-ripgrep/evidence/search/\(query.stableName).json"
 	}
 	results: [...{
-		path: #RgSearchResultPath
+		path:  #RgSearchResultPath
 		line?: #RgSearchResultLine
-		text: #RgSearchResultText
+		text:  #RgSearchResultText
 	}]
 	truncated: bool
 	...

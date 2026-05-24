@@ -43,7 +43,7 @@ package cuerail
 	model:           "gpt-4.1"
 	permission_mode: "default"
 	session_id:      "session-example"
-	tool_input:      {}
+	tool_input: {}
 	tool_name:       "mcp-ripgrep"
 	tool_use_id:     "tool-use-example"
 	transcript_path: null
@@ -62,7 +62,7 @@ package cuerail
 	model:           "gpt-4.1"
 	permission_mode: "default"
 	session_id:      "session-example"
-	tool_input:      {}
+	tool_input: {}
 	tool_name:       "mcp-ripgrep"
 	transcript_path: null
 	turn_id:         "turn-example"
@@ -80,9 +80,9 @@ package cuerail
 	model:           "gpt-4.1"
 	permission_mode: "default"
 	session_id:      "session-example"
-	tool_input:      {}
-	tool_name:       "mcp-ripgrep"
-	tool_response:   {}
+	tool_input: {}
+	tool_name: "mcp-ripgrep"
+	tool_response: {}
 	tool_use_id:     "tool-use-example"
 	transcript_path: null
 	turn_id:         "turn-example"
@@ -146,11 +146,11 @@ package cuerail
 
 #ExampleSubagentStopHookInput: {
 	agent_id:               "agent-example"
-	agent_transcript_path:   null
-	agent_type:              "analysis"
+	agent_transcript_path:  null
+	agent_type:             "analysis"
 	cwd:                    "/tmp/cuerail-example"
 	hook_event_name:        "SubagentStop"
-	last_assistant_message:  null
+	last_assistant_message: null
 	model:                  "gpt-4.1"
 	permission_mode:        "default"
 	session_id:             "session-example"
@@ -168,7 +168,7 @@ package cuerail
 #ExampleStopHookInput: {
 	cwd:                    "/tmp/cuerail-example"
 	hook_event_name:        "Stop"
-	last_assistant_message:  null
+	last_assistant_message: null
 	model:                  "gpt-4.1"
 	permission_mode:        "default"
 	session_id:             "session-example"

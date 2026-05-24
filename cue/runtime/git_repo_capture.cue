@@ -1,9 +1,9 @@
 package cuerail
 
-#GitRepoName:            =~"^[A-Za-z0-9._-]+$"
-#GitRepoRoot:            =~"^/.*[^/]$"
-#GitObjectID:            =~"^[0-9a-f]{7,64}$"
-#GitCaptureTimestamp:    =~"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+#GitRepoName:             =~"^[A-Za-z0-9._-]+$"
+#GitRepoRoot:             =~"^/.*[^/]$"
+#GitObjectID:             =~"^[0-9a-f]{7,64}$"
+#GitCaptureTimestamp:     =~"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
 #GitRepoCaptureKind:      "status" | "diff-unstaged" | "diff-staged" | "log"
 #GitRepoDiffCaptureKind:  "diff-unstaged" | "diff-staged"
 #GitRepoDiffScope:        "unstaged" | "staged"

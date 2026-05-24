@@ -69,9 +69,9 @@ into the live agent loop:
 ```cue
 #AgentFeed: {
   enabled: bool
-  channel?: "stdout.additionalContext" | "stdout.systemMessage" | "continue.reason"
-  status:  "not_attempted" | "emitted" | "unsupported_event" | "invalid_output"
-  payloadKind: "none" | "pointer" | "raw.awareness.results" | "raw.tool.response" | "summary"
+  channel?: "stdout.additionalContext"
+  status:  "not_attempted" | "emitted" | "invalid_output"
+  payloadKind: "none" | "raw.event" | "raw.tool.response"
   bytes?:  int & >=0
   maxBytes?: int & >=0
   truncated?: bool

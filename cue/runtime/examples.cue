@@ -6,9 +6,9 @@ package cuerail
 	model:           "gpt-4.1"
 	permission_mode: "default"
 	session_id:      "session-example"
-	tool_input:      {}
-	tool_name:       "mcp-ripgrep"
-	tool_response:   {}
+	tool_input: {}
+	tool_name: "mcp-ripgrep"
+	tool_response: {}
 	tool_use_id:     "tool-use-rg-example"
 	transcript_path: null
 	turn_id:         "turn-example"
@@ -20,9 +20,9 @@ package cuerail
 	model:           "gpt-4.1"
 	permission_mode: "default"
 	session_id:      "session-example"
-	tool_input:      {}
-	tool_name:       "git-mcp-server"
-	tool_response:   {}
+	tool_input: {}
+	tool_name: "git-mcp-server"
+	tool_response: {}
 	tool_use_id:     "tool-use-git-example"
 	transcript_path: null
 	turn_id:         "turn-example"
@@ -34,9 +34,9 @@ package cuerail
 	model:           "gpt-4.1"
 	permission_mode: "default"
 	session_id:      "session-example"
-	tool_input:      {}
-	tool_name:       "some-other-tool"
-	tool_response:   {}
+	tool_input: {}
+	tool_name: "some-other-tool"
+	tool_response: {}
 	tool_use_id:     "tool-use-other-example"
 	transcript_path: null
 	turn_id:         "turn-example"

@@ -100,7 +100,11 @@ cleanup_temp_files() {
   [ -n "${expected_git_fixture_paths:-}" ] && rm -f "$expected_git_fixture_paths"
   [ -n "${actual_git_fixture_paths:-}" ] && rm -f "$actual_git_fixture_paths"
   [ -n "${generated_git_capture_paths:-}" ] && rm -f "$generated_git_capture_paths"
+  [ -n "${git_status_payload_json:-}" ] && rm -f "$git_status_payload_json"
+  [ -n "${git_unstaged_payload_json:-}" ] && rm -f "$git_unstaged_payload_json"
+  [ -n "${git_staged_payload_json:-}" ] && rm -f "$git_staged_payload_json"
   [ -n "${generated_rg_capture_path:-}" ] && rm -f "$generated_rg_capture_path"
+  [ -n "${rg_mcp_output_json:-}" ] && rm -f "$rg_mcp_output_json"
   [ -n "${token_usage_json:-}" ] && rm -f "$token_usage_json"
   [ -n "${manifest_json:-}" ] && rm -f "$manifest_json"
   [ -n "${review_packet_json:-}" ] && rm -f "$review_packet_json"
@@ -166,6 +170,86 @@ assert_manifest_content() {
 
   rm -f "$manifest_json"
   manifest_json=
+}
+
+write_git_status_payload() {
+  out=$1
+
+  changed_json=$(git -C "$CUERAIL_HOME" status --porcelain --untracked-files=no |
+    sed 's/^...//' |
+    jq -R -s 'split("\n") | map(select(length > 0))')
+  untracked_json=$(git -C "$CUERAIL_HOME" ls-files --others --exclude-standard |
+    jq -R -s 'split("\n") | map(select(length > 0))')
+  if [ -n "$(git -C "$CUERAIL_HOME" status --porcelain)" ]; then
+    clean=false
+  else
+    clean=true
+  fi
+
+  jq -n \
+    --arg head "$(git -C "$CUERAIL_HOME" rev-parse --short HEAD)" \
+    --arg branch "$(git -C "$CUERAIL_HOME" rev-parse --abbrev-ref HEAD)" \
+    --argjson clean "$clean" \
+    --argjson changed "$changed_json" \
+    --argjson untracked "$untracked_json" \
+    '{
+      head: $head,
+      branch: $branch,
+      clean: $clean,
+      changed: $changed,
+      untracked: $untracked
+    }' >"$out"
+}
+
+write_git_diff_payload() {
+  scope=$1
+  out=$2
+  patch_file=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-git-patch.XXXXXX")
+  paths_file=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-git-paths.XXXXXX")
+  stat_file=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-git-stat.XXXXXX")
+
+  case "$scope" in
+    unstaged)
+      git -C "$CUERAIL_HOME" diff --no-ext-diff --binary >"$patch_file"
+      git -C "$CUERAIL_HOME" diff --name-only >"$paths_file"
+      git -C "$CUERAIL_HOME" diff --numstat >"$stat_file"
+      ;;
+    staged)
+      git -C "$CUERAIL_HOME" diff --cached --no-ext-diff --binary >"$patch_file"
+      git -C "$CUERAIL_HOME" diff --cached --name-only >"$paths_file"
+      git -C "$CUERAIL_HOME" diff --cached --numstat >"$stat_file"
+      ;;
+    *)
+      die "invalid git diff payload scope: $scope"
+      ;;
+  esac
+
+  paths_json=$(jq -R -s 'split("\n") | map(select(length > 0))' "$paths_file")
+  stat_json=$(awk -F '\t' '
+    BEGIN { files = 0; insertions = 0; deletions = 0 }
+    NF >= 3 {
+      files += 1
+      if ($1 ~ /^[0-9]+$/) insertions += $1
+      if ($2 ~ /^[0-9]+$/) deletions += $2
+    }
+    END {
+      printf "{\"files\":%d,\"insertions\":%d,\"deletions\":%d}", files, insertions, deletions
+    }
+  ' "$stat_file")
+
+  jq -n \
+    --arg scope "$scope" \
+    --rawfile patch "$patch_file" \
+    --argjson stat "$stat_json" \
+    --argjson paths "$paths_json" \
+    '{
+      scope: $scope,
+      patch: $patch,
+      stat: $stat,
+      paths: $paths
+    }' >"$out"
+
+  rm -f "$patch_file" "$paths_file" "$stat_file"
 }
 
 mode=${1:-source}
@@ -253,6 +337,47 @@ output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-agent-feed.XXXXXX.json")
 jq -n '{
   hookInput: {
     cwd: "/tmp/cuerail-example",
+    hook_event_name: "SessionStart",
+    model: "gpt-4.1",
+    permission_mode: "default",
+    session_id: "session-example",
+    source: "startup",
+    transcript_path: null,
+  },
+  awarenessResults: [],
+  awarenessExecutable: false,
+  awarenessExecutionReason: "no_mcp_read_executor",
+  agentFeedbackContext: "Cuerail raw hook feedback:\n{\"schemaVersion\":\"cuerail.agentFeedback.raw.v1\",\"hookEventName\":\"SessionStart\",\"sessionId\":\"session-example\",\"input\":{\"hook_event_name\":\"SessionStart\"},\"awareness\":{\"executable\":false,\"reason\":\"no_mcp_read_executor\",\"plan\":{\"phase\":\"SessionStart\",\"ops\":[]},\"results\":[]}}",
+  agentFeedbackMaxBytes: 8000,
+  agentFeedbackTruncated: false,
+  agentFeedbackSource: "hook.raw"
+}' >"$output_json"
+(
+  cd "$CUERAIL_HOME"
+  cue export ./cue/runtime "$output_json" -e '#HookManifest' |
+    jq -e '
+      .agentFeed.enabled == true and
+      .agentFeed.channel == "stdout.additionalContext" and
+      .agentFeed.status == "emitted" and
+      .agentFeed.payloadKind == "raw.event" and
+      .agentFeed.bytes > 0 and
+      .agentFeed.maxBytes == 8000 and
+      (.agentFeed.truncated | type) == "boolean" and
+      .agentFeed.source == "hook.raw" and
+      .output.hookSpecificOutput.hookEventName == "SessionStart" and
+      (.output.hookSpecificOutput.additionalContext | contains("cuerail.agentFeedback.raw.v1")) and
+      (.output.hookSpecificOutput.additionalContext | contains("no_mcp_read_executor")) and
+      (.output.hookSpecificOutput.additionalContext | length) == .agentFeed.bytes and
+      (.output.hookSpecificOutput.additionalContext | length) <= .agentFeed.maxBytes
+    ' >/dev/null
+) || die "agent_feed_session_start_projection_invalid"
+rm -f "$output_json"
+output_json=
+
+output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-agent-feed.XXXXXX.json")
+jq -n '{
+  hookInput: {
+    cwd: "/tmp/cuerail-example",
     hook_event_name: "PreToolUse",
     model: "gpt-4.1",
     permission_mode: "default",
@@ -263,51 +388,75 @@ jq -n '{
     transcript_path: null,
     turn_id: "turn-example"
   },
-  awarenessResults: [{
-    id: "pre-tool-use.rg.tool-policy",
-    substrate: "mcp",
-    tool: "mcp-ripgrep",
-    op: "search",
-    input: {},
-    status: "ok",
-    raw: {}
-  }],
-  agentFeedbackContext: "Cuerail raw awareness feedback:\n{\"schemaVersion\":\"cuerail.agentFeedback.raw.v1\",\"hookEventName\":\"PreToolUse\",\"eventPath\":null,\"awareness\":{\"results\":[{\"id\":\"pre-tool-use.rg.tool-policy\"}]}}",
+  awarenessResults: [],
+  awarenessExecutable: false,
+  awarenessExecutionReason: "no_mcp_read_executor",
+  agentFeedbackContext: "Cuerail raw hook feedback:\n{\"schemaVersion\":\"cuerail.agentFeedback.raw.v1\",\"hookEventName\":\"PreToolUse\",\"sessionId\":\"session-example\",\"turnId\":\"turn-example\",\"cwd\":\"/tmp/cuerail-example\",\"input\":{\"hook_event_name\":\"PreToolUse\"},\"awareness\":{\"executable\":false,\"reason\":\"no_mcp_read_executor\",\"plan\":{\"phase\":\"PreToolUse\",\"ops\":[{\"id\":\"pre-tool-use.rg.tool-policy\"}]},\"results\":[]},\"tool\":{\"name\":\"mcp-ripgrep\",\"input\":{}}}",
   agentFeedbackMaxBytes: 8000,
   agentFeedbackTruncated: false,
-  agentFeedbackSource: "awareness.results"
+  agentFeedbackSource: "hook.raw"
 }' >"$output_json"
 (
   cd "$CUERAIL_HOME"
   cue export ./cue/runtime "$output_json" -e '#HookManifest' |
     jq -e '
       .agentFeed.enabled == true and
-      .agentFeed.channel == "stdout.additionalContext" and
-      .agentFeed.status == "emitted" and
-      .agentFeed.payloadKind == "raw.awareness.results" and
-      .agentFeed.bytes > 0 and
-      .agentFeed.maxBytes == 8000 and
-      (.agentFeed.truncated | type) == "boolean" and
-      .agentFeed.source == "awareness.results" and
+      .agentFeed.payloadKind == "raw.event" and
+      .agentFeed.source == "hook.raw" and
       .output.hookSpecificOutput.hookEventName == "PreToolUse" and
-      (.output.hookSpecificOutput.additionalContext | contains("cuerail.agentFeedback.raw.v1")) and
-      (.output.hookSpecificOutput.additionalContext | contains("pre-tool-use.rg.tool-policy")) and
-      (.output.hookSpecificOutput.additionalContext | length) == .agentFeed.bytes and
-      (.output.hookSpecificOutput.additionalContext | length) <= .agentFeed.maxBytes
+      (.output.hookSpecificOutput.additionalContext | contains("\"results\":[]")) and
+      (.output.hookSpecificOutput.additionalContext | contains("no_mcp_read_executor")) and
+      (.output.hookSpecificOutput.additionalContext | contains("pre-tool-use.rg.tool-policy"))
     ' >/dev/null
-) || die "agent_feed_projection_invalid"
+) || die "agent_feed_pre_tool_use_empty_results_projection_invalid"
+rm -f "$output_json"
+output_json=
+
+output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-agent-feed.XXXXXX.json")
+jq -n '{
+  hookInput: {
+    cwd: "/tmp/cuerail-example",
+    hook_event_name: "PostToolUse",
+    model: "gpt-4.1",
+    permission_mode: "default",
+    session_id: "session-example",
+    tool_input: {},
+    tool_name: "git-mcp-server",
+    tool_response: {"ok": true},
+    tool_use_id: "tool-use-example",
+    transcript_path: null,
+    turn_id: "turn-example"
+  },
+  awarenessResults: [],
+  awarenessExecutable: true,
+  agentFeedbackContext: "Cuerail raw hook feedback:\n{\"schemaVersion\":\"cuerail.agentFeedback.raw.v1\",\"hookEventName\":\"PostToolUse\",\"sessionId\":\"session-example\",\"turnId\":\"turn-example\",\"cwd\":\"/tmp/cuerail-example\",\"input\":{\"hook_event_name\":\"PostToolUse\"},\"awareness\":{\"executable\":true,\"plan\":{\"phase\":\"PostToolUse\",\"ops\":[]},\"results\":[]},\"tool\":{\"name\":\"git-mcp-server\",\"input\":{},\"response\":{\"ok\":true}}}",
+  agentFeedbackMaxBytes: 8000,
+  agentFeedbackTruncated: false,
+  agentFeedbackSource: "hook.raw"
+}' >"$output_json"
+(
+  cd "$CUERAIL_HOME"
+  cue export ./cue/runtime "$output_json" -e '#HookManifest' |
+    jq -e '
+      .agentFeed.enabled == true and
+      .agentFeed.payloadKind == "raw.tool.response" and
+      .agentFeed.source == "hook.raw" and
+      .output.hookSpecificOutput.hookEventName == "PostToolUse" and
+      (.output.hookSpecificOutput.additionalContext | contains("\"response\":{\"ok\":true}"))
+    ' >/dev/null
+) || die "agent_feed_post_tool_use_projection_invalid"
 rm -f "$output_json"
 output_json=
 
 (
   cd "$CUERAIL_HOME"
-  cue export ./cue/runtime -e '#ExamplePreToolUseManifest' |
+  cue export ./cue/runtime -e '#ExampleStopManifest' |
     jq -e '
       .agentFeed.enabled == false and
       .agentFeed.payloadKind == "none" and
       (.output.hookSpecificOutput.additionalContext? | not)
     ' >/dev/null
-) || die "agent_feed_negative_projection_invalid"
+) || die "agent_feed_stop_persist_only_projection_invalid"
 
 for fixture in "$CUERAIL_HOME"/test/fixtures/token-usage/*.txt; do
   [ -f "$fixture" ] || continue
@@ -517,9 +666,19 @@ expected_git_fixture_paths=
 actual_git_fixture_paths=
 
 generated_git_capture_paths=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-git-capture-paths.XXXXXX")
+git_status_payload_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-git-status.XXXXXX.json")
+git_unstaged_payload_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-git-unstaged.XXXXXX.json")
+git_staged_payload_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-git-staged.XXXXXX.json")
+write_git_status_payload "$git_status_payload_json"
+write_git_diff_payload unstaged "$git_unstaged_payload_json"
+write_git_diff_payload staged "$git_staged_payload_json"
 CUERAIL_CACHE="$doctor_fixture_state/cache" "$CUERAIL_HOME/bin/cuerail-git-capture" \
-  --adapter fallback --repo "$CUERAIL_HOME" --repo-name cuerail >"$generated_git_capture_paths"
-git_yellow_count=0
+  --adapter mcp --from-json "$git_status_payload_json" --repo "$CUERAIL_HOME" --repo-name cuerail status >"$generated_git_capture_paths"
+CUERAIL_CACHE="$doctor_fixture_state/cache" "$CUERAIL_HOME/bin/cuerail-git-capture" \
+  --adapter mcp --from-json "$git_unstaged_payload_json" --repo "$CUERAIL_HOME" --repo-name cuerail diff-unstaged >>"$generated_git_capture_paths"
+CUERAIL_CACHE="$doctor_fixture_state/cache" "$CUERAIL_HOME/bin/cuerail-git-capture" \
+  --adapter mcp --from-json "$git_staged_payload_json" --repo "$CUERAIL_HOME" --repo-name cuerail diff-staged >>"$generated_git_capture_paths"
+git_green_count=0
 while IFS= read -r evidence; do
   [ -f "$evidence" ] || die "generated git evidence missing: $evidence"
   (
@@ -527,22 +686,34 @@ while IFS= read -r evidence; do
     cue vet -c=false ./cue/runtime "$evidence" -d '#GitRepoCapture'
   ) || die "schema_invalid_generated_git_capture: $(basename "$evidence")"
   jq -e '
-    .adapter == "repo-git" and
-    .readiness == "yellow" and
-    .source.tool == "repo-git" and
+    .adapter == "git-mcp-go" and
+    .readiness == "green" and
+    .source.tool == "git-mcp-go" and
     (.evidence.cacheRel | startswith("mcp/git-mcp-go/evidence/repos/cuerail/"))
   ' "$evidence" >/dev/null ||
-    die "generated git fallback evidence not explicitly yellow: $evidence"
-  git_yellow_count=$((git_yellow_count + 1))
+    die "generated git MCP evidence not explicitly green: $evidence"
+  git_green_count=$((git_green_count + 1))
 done <"$generated_git_capture_paths"
-[ "$git_yellow_count" -eq 3 ] ||
-  die "wrong generated git fallback evidence count: $git_yellow_count"
-rm -f "$generated_git_capture_paths"
+[ "$git_green_count" -eq 3 ] ||
+  die "wrong generated git MCP evidence count: $git_green_count"
+rm -f "$generated_git_capture_paths" "$git_status_payload_json" "$git_unstaged_payload_json" "$git_staged_payload_json"
 generated_git_capture_paths=
+git_status_payload_json=
+git_unstaged_payload_json=
+git_staged_payload_json=
 
 generated_rg_capture_path=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-rg-capture-path.XXXXXX")
+rg_mcp_output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-rg-output.XXXXXX.json")
+awk -v root="$CUERAIL_HOME" -v max=5 '
+  index($0, "cuerail-doctor") {
+    print root "/bin/cuerail-doctor:" NR ":" $0
+    count += 1
+    if (count >= max) exit
+  }
+' "$CUERAIL_HOME/bin/cuerail-doctor" |
+  jq -R -s '[{type: "text", text: .}]' >"$rg_mcp_output_json"
 CUERAIL_CACHE="$doctor_fixture_state/cache" "$CUERAIL_HOME/bin/cuerail-rg-capture" \
-  --adapter fallback --repo "$CUERAIL_HOME" --repo-name cuerail --mode literal --max-results 5 \
+  --adapter mcp --from-json "$rg_mcp_output_json" --repo "$CUERAIL_HOME" --repo-name cuerail --mode literal --max-results 5 \
   'cuerail-doctor' >"$generated_rg_capture_path"
 rg_evidence=$(sed -n '1p' "$generated_rg_capture_path")
 [ -f "$rg_evidence" ] || die "generated rg evidence missing: $rg_evidence"
@@ -551,16 +722,17 @@ rg_evidence=$(sed -n '1p' "$generated_rg_capture_path")
   cue vet -c=false ./cue/runtime "$rg_evidence" -d '#RgSearchCapture'
 ) || die "schema_invalid_generated_rg_capture: $(basename "$rg_evidence")"
 jq -e '
-  .adapter == "repo-rg" and
-  .readiness == "yellow" and
-  .source.tool == "repo-rg" and
+  .adapter == "mcp-ripgrep" and
+  .readiness == "green" and
+  .source.tool == "mcp-ripgrep" and
   .query.pattern == "cuerail-doctor" and
   (.results | type == "array") and
   (.evidence.cacheRel | startswith("mcp/mcp-ripgrep/evidence/search/"))
 ' "$rg_evidence" >/dev/null ||
-  die "generated rg fallback evidence not explicitly yellow: $rg_evidence"
-rm -f "$generated_rg_capture_path"
+  die "generated rg MCP evidence not explicitly green: $rg_evidence"
+rm -f "$generated_rg_capture_path" "$rg_mcp_output_json"
 generated_rg_capture_path=
+rg_mcp_output_json=
 
 review_packet_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-review-packet.XXXXXX.json")
 CUERAIL_CACHE="$doctor_fixture_state/cache" CUERAIL_REVIEW_PACKET_SKIP_SOURCE_DOCTOR=1 \
@@ -571,18 +743,18 @@ jq -e . "$review_packet_json" >/dev/null
   cue vet -c=false ./cue/runtime "$review_packet_json" -d '#ReviewPacket'
 ) || die "invalid review packet output with hook frames"
 jq -e '
-  .readSources.git.state == "yellow" and
+  .readSources.git.state == "green" and
   (.readSources.git.files | length) == 3 and
-  all(.readSources.git.files[]; .adapter == "repo-git" and .readiness == "yellow") and
-  .readSources.rg.state == "yellow" and
+  all(.readSources.git.files[]; .adapter == "git-mcp-go" and .readiness == "green") and
+  .readSources.rg.state == "green" and
   (.readSources.rg.files | length) == 1 and
-  all(.readSources.rg.files[]; .adapter == "repo-rg" and .readiness == "yellow") and
+  all(.readSources.rg.files[]; .adapter == "mcp-ripgrep" and .readiness == "green") and
   .hookFrames.sessionStart.phase == "session_start" and
   .hookFrames.sessionStart.status.projectionValidity == "green" and
-  any(.hookFrames.sessionStart.status.sources[]; .kind == "fallback" and .tool == "repo-git" and .readOnly == true) and
+  any(.hookFrames.sessionStart.status.sources[]; .kind == "mcp" and .tool == "git-mcp-go" and .readOnly == true) and
   .hookFrames.preToolUse.phase == "pre_tool_use" and
   .hookFrames.preToolUse.status.projectionValidity == "green" and
-  any(.hookFrames.preToolUse.status.sources[]; .kind == "fallback" and .tool == "repo-rg" and .readOnly == true) and
+  any(.hookFrames.preToolUse.status.sources[]; .kind == "mcp" and .tool == "mcp-ripgrep" and .readOnly == true) and
   .hookFrames.postToolUse.phase == "post_tool_use" and
   .hookFrames.postToolUse.status.projectionValidity == "green" and
   .hookFrames.stop.phase == "stop" and
@@ -695,8 +867,8 @@ if [ "$mode" = "all" ]; then
   run_runtime_checks
 fi
 
-printf 'cuerail-doctor: git_read_source: available via repo-git fallback\n'
-printf 'cuerail-doctor: rg_read_source: available via repo-rg fallback\n'
+printf 'cuerail-doctor: git_read_source: available via git-mcp-go capture\n'
+printf 'cuerail-doctor: rg_read_source: available via mcp-ripgrep capture\n'
 printf 'cuerail-doctor: session_start_projection: green\n'
 printf 'cuerail-doctor: pre_tool_use_projection: green\n'
 printf 'cuerail-doctor: post_tool_use_projection: green\n'

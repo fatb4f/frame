@@ -44,11 +44,11 @@ _agentFeedbackSource: agentFeedbackSource
 	}
 }
 
-#AgentFeedChannel: "stdout.additionalContext" | "stdout.systemMessage" | "continue.reason"
+#AgentFeedChannel: "stdout.additionalContext"
 
-#AgentFeedStatus: "not_attempted" | "emitted" | "unsupported_event" | "invalid_output"
+#AgentFeedStatus: "not_attempted" | "emitted" | "invalid_output"
 
-#AgentFeedPayloadKind: "none" | "pointer" | "raw.awareness.results" | "raw.tool.response" | "summary"
+#AgentFeedPayloadKind: "none" | "raw.event" | "raw.tool.response"
 
 #AgentFeed: {
 	enabled!:     bool
@@ -67,10 +67,36 @@ _agentFeedbackSource: agentFeedbackSource
 	payloadKind: "none"
 }
 
-#PreToolUseAgentFeed: #AgentFeed & {
-	enabled:     *false | bool
-	status:      *"not_attempted" | #AgentFeedStatus
-	payloadKind: *"none" | #AgentFeedPayloadKind
+#RawEventAgentFeed: #AgentFeed & {
+	if _agentFeedbackContext == "" {
+		#NoAgentFeed
+	}
+	if _agentFeedbackContext != "" {
+		enabled:     true
+		channel:     "stdout.additionalContext"
+		status:      "emitted"
+		payloadKind: "raw.event"
+		bytes:       len(_agentFeedbackContext)
+		maxBytes:    _agentFeedbackMaxBytes
+		truncated:   _agentFeedbackTruncated
+		source:      _agentFeedbackSource
+	}
+}
+
+#RawToolResponseAgentFeed: #AgentFeed & {
+	if _agentFeedbackContext == "" {
+		#NoAgentFeed
+	}
+	if _agentFeedbackContext != "" {
+		enabled:     true
+		channel:     "stdout.additionalContext"
+		status:      "emitted"
+		payloadKind: "raw.tool.response"
+		bytes:       len(_agentFeedbackContext)
+		maxBytes:    _agentFeedbackMaxBytes
+		truncated:   _agentFeedbackTruncated
+		source:      _agentFeedbackSource
+	}
 }
 
 #HookInputByEvent: {
@@ -116,8 +142,15 @@ _agentFeedbackSource: agentFeedbackSource
 		results: _awarenessResults
 		#AwarenessExecution
 	}
-	output:    hooks.#SessionStartCommandOutput
-	agentFeed: #NoAgentFeed
+	output: hooks.#SessionStartCommandOutput & {
+		if _agentFeedbackContext != "" {
+			hookSpecificOutput: {
+				hookEventName:     "SessionStart"
+				additionalContext: _agentFeedbackContext
+			}
+		}
+	}
+	agentFeed: #RawEventAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -131,8 +164,15 @@ _agentFeedbackSource: agentFeedbackSource
 		results: _awarenessResults
 		#AwarenessExecution
 	}
-	output:    hooks.#UserPromptSubmitCommandOutput
-	agentFeed: #NoAgentFeed
+	output: hooks.#UserPromptSubmitCommandOutput & {
+		if _agentFeedbackContext != "" {
+			hookSpecificOutput: {
+				hookEventName:     "UserPromptSubmit"
+				additionalContext: _agentFeedbackContext
+			}
+		}
+	}
+	agentFeed: #RawEventAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -147,25 +187,14 @@ _agentFeedbackSource: agentFeedbackSource
 		#AwarenessExecution
 	}
 	output: hooks.#PreToolUseCommandOutput & {
-		if len(_awarenessResults) > 0 && _agentFeedbackContext != "" {
+		if _agentFeedbackContext != "" {
 			hookSpecificOutput: {
 				hookEventName:     "PreToolUse"
 				additionalContext: _agentFeedbackContext
 			}
 		}
 	}
-	agentFeed: #PreToolUseAgentFeed & {
-		if len(_awarenessResults) > 0 && _agentFeedbackContext != "" {
-			enabled:     true
-			channel:     "stdout.additionalContext"
-			status:      "emitted"
-			payloadKind: "raw.awareness.results"
-			bytes:       len(_agentFeedbackContext)
-			maxBytes:    _agentFeedbackMaxBytes
-			truncated:   _agentFeedbackTruncated
-			source:      _agentFeedbackSource
-		}
-	}
+	agentFeed: #RawEventAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -194,8 +223,15 @@ _agentFeedbackSource: agentFeedbackSource
 		results: _awarenessResults
 		#AwarenessExecution
 	}
-	output:    hooks.#PostToolUseCommandOutput
-	agentFeed: #NoAgentFeed
+	output: hooks.#PostToolUseCommandOutput & {
+		if _agentFeedbackContext != "" {
+			hookSpecificOutput: {
+				hookEventName:     "PostToolUse"
+				additionalContext: _agentFeedbackContext
+			}
+		}
+	}
+	agentFeed: #RawToolResponseAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}

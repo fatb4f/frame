@@ -27,7 +27,7 @@ package cuerail
 	phase:  "pre_tool_use"
 	repo?:  #HookRepoFrame
 	tool: {
-		name: string
+		name:   string
 		input?: _
 	}
 	risk: {
@@ -45,7 +45,7 @@ package cuerail
 	phase:  "post_tool_use"
 	repo?:  #HookRepoFrame
 	tool: {
-		name: string
+		name:    string
 		result?: _
 	}
 	delta: {

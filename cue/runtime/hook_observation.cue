@@ -1,9 +1,9 @@
 package cuerail
 
-#HookPhase: "session_start" | "pre_tool_use" | "post_tool_use" | "stop"
+#HookPhase:                 "session_start" | "pre_tool_use" | "post_tool_use" | "stop"
 #HookObservationSourceKind: "mcp" | "fallback" | "ad_hoc" | "fixture"
-#HookObservationValidity: "green" | "yellow" | "red" | "unknown"
-#HookObservationTimestamp: =~"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+#HookObservationValidity:   "green" | "yellow" | "red" | "unknown"
+#HookObservationTimestamp:  =~"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
 
 #HookObservationSource: {
 	kind:     #HookObservationSourceKind
@@ -51,7 +51,7 @@ package cuerail
 		tool:     "repo-git"
 		readOnly: true
 		adapter:  "repo-git"
-		command:  ["repo-git", "status", "."]
+		command: ["repo-git", "status", "."]
 	}
 	repo: {
 		name: "cuerail"

@@ -143,29 +143,45 @@ if (
   cue export ./cue/runtime "$wrapped_json" -e '#HookManifest.awareness.plan' >"$plan_json"
 ); then
   execute_awareness_plan "$plan_json" "$results_json" "$awareness_meta_json"
-  jq -c --slurpfile results "$results_json" --slurpfile meta "$awareness_meta_json" \
-    '. + {awarenessResults: $results[0], awarenessExecutable: $meta[0].awarenessExecutable} +
+  jq -c --slurpfile results "$results_json" --slurpfile meta "$awareness_meta_json" --slurpfile plan "$plan_json" \
+    '. + {awarenessResults: $results[0], awarenessPlan: $plan[0], awarenessExecutable: $meta[0].awarenessExecutable} +
       (if ($meta[0].reason? // "") != "" then {awarenessExecutionReason: $meta[0].reason} else {} end)' \
     "$wrapped_json" >"$wrapped_with_results_json" || die "could not inject awareness results"
 
   jq -c --argjson maxBytes "${CUERAIL_AGENT_FEEDBACK_MAX_BYTES:-8000}" '
-    if .hookInput.hook_event_name == "PreToolUse" and ((.awarenessResults // []) | length) > 0 then
+    def feedable:
+      .hookInput.hook_event_name == "SessionStart" or
+      .hookInput.hook_event_name == "UserPromptSubmit" or
+      .hookInput.hook_event_name == "PreToolUse" or
+      .hookInput.hook_event_name == "PostToolUse";
+    def compact_awareness:
+      {
+        executable: (.awarenessExecutable // true),
+        plan: (.awarenessPlan // null),
+        results: (.awarenessResults // [])
+      } + (if (.awarenessExecutionReason? // "") != "" then {reason: .awarenessExecutionReason} else {} end);
+    def compact_tool:
+      {} +
+      (if (.hookInput.tool_name? // "") != "" then {name: .hookInput.tool_name} else {} end) +
+      (if .hookInput | has("tool_input") then {input: .hookInput.tool_input} else {} end) +
+      (if .hookInput.hook_event_name == "PostToolUse" and (.hookInput | has("tool_response")) then {response: .hookInput.tool_response} else {} end);
+    if feedable then
       ({
         schemaVersion: "cuerail.agentFeedback.raw.v1",
         hookEventName: .hookInput.hook_event_name,
         sessionId: .hookInput.session_id,
-        turnId: (.hookInput.turn_id // null),
-        eventPath: null,
-        awareness: ({
-          executable: (.awarenessExecutable // true),
-          results: .awarenessResults
-        } + (if (.awarenessExecutionReason? // "") != "" then {reason: .awarenessExecutionReason} else {} end))
-      } | "Cuerail raw awareness feedback:\n" + tojson) as $fullContext |
+        input: .hookInput,
+        awareness: compact_awareness
+      } +
+      (if (.hookInput.turn_id? // "") != "" then {turnId: .hookInput.turn_id} else {} end) +
+      (if (.hookInput.cwd? // "") != "" then {cwd: .hookInput.cwd} else {} end) +
+      (if (compact_tool | length) > 0 then {tool: compact_tool} else {} end) |
+      "Cuerail raw hook feedback:\n" + tojson) as $fullContext |
       . + {
         agentFeedbackContext: ($fullContext[0:$maxBytes]),
         agentFeedbackMaxBytes: $maxBytes,
         agentFeedbackTruncated: (($fullContext | length) > $maxBytes),
-        agentFeedbackSource: "awareness.results"
+        agentFeedbackSource: "hook.raw"
       }
     else
       .
