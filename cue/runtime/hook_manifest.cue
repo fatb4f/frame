@@ -37,6 +37,14 @@ agentFeedbackSource: string | *""
 
 _agentFeedbackSource: agentFeedbackSource
 
+agentFeedbackPayloadKind: #AgentFeedPayloadKind | *"none"
+
+_agentFeedbackPayloadKind: agentFeedbackPayloadKind
+
+agentFeedbackReason?: #AgentFeedReason
+
+_agentFeedbackReason: agentFeedbackReason
+
 #AwarenessExecution: {
 	executable: _awarenessExecutable
 	if _awarenessExecutable == false {
@@ -48,7 +56,22 @@ _agentFeedbackSource: agentFeedbackSource
 
 #AgentFeedStatus: "not_attempted" | "emitted" | "invalid_output"
 
-#AgentFeedPayloadKind: "none" | "raw.event" | "raw.tool.response"
+#AgentFeedPayloadKind: "none" | "raw.event" | "raw.tool.response" | "compact.hook" | "compact.mcp.git" | "compact.mcp.rg"
+
+#FeedableTool: "mcp__git_mcp_server__git_status" |
+	"mcp__git_mcp_server__git_diff" |
+	"mcp__git_mcp_server__git_diff_staged" |
+	"mcp__git_mcp_server__git_log" |
+	"mcp__mcp_ripgrep__search" |
+	"mcp__mcp_ripgrep__list_files"
+
+#AgentFeedReason: "feedable_mcp" | "tool_not_feedable" | "persist_only_phase"
+
+#AgentFeedDecision: {
+	feedable!: bool
+	reason!:   #AgentFeedReason
+	toolName?: string
+}
 
 #AgentFeed: {
 	enabled!:     bool
@@ -59,15 +82,19 @@ _agentFeedbackSource: agentFeedbackSource
 	maxBytes?:    int & >=0
 	truncated?:   bool
 	source?:      string
+	reason?:      #AgentFeedReason
 }
 
 #NoAgentFeed: #AgentFeed & {
 	enabled:     false
 	status:      "not_attempted"
 	payloadKind: "none"
+	if _agentFeedbackReason != _|_ {
+		reason: _agentFeedbackReason
+	}
 }
 
-#RawEventAgentFeed: #AgentFeed & {
+#CompactAgentFeed: #AgentFeed & {
 	if _agentFeedbackContext == "" {
 		#NoAgentFeed
 	}
@@ -75,27 +102,14 @@ _agentFeedbackSource: agentFeedbackSource
 		enabled:     true
 		channel:     "stdout.additionalContext"
 		status:      "emitted"
-		payloadKind: "raw.event"
+		payloadKind: _agentFeedbackPayloadKind
 		bytes:       len(_agentFeedbackContext)
 		maxBytes:    _agentFeedbackMaxBytes
 		truncated:   _agentFeedbackTruncated
 		source:      _agentFeedbackSource
-	}
-}
-
-#RawToolResponseAgentFeed: #AgentFeed & {
-	if _agentFeedbackContext == "" {
-		#NoAgentFeed
-	}
-	if _agentFeedbackContext != "" {
-		enabled:     true
-		channel:     "stdout.additionalContext"
-		status:      "emitted"
-		payloadKind: "raw.tool.response"
-		bytes:       len(_agentFeedbackContext)
-		maxBytes:    _agentFeedbackMaxBytes
-		truncated:   _agentFeedbackTruncated
-		source:      _agentFeedbackSource
+		if _agentFeedbackReason != _|_ {
+			reason: _agentFeedbackReason
+		}
 	}
 }
 
@@ -150,7 +164,7 @@ _agentFeedbackSource: agentFeedbackSource
 			}
 		}
 	}
-	agentFeed: #RawEventAgentFeed
+	agentFeed: #CompactAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -172,7 +186,7 @@ _agentFeedbackSource: agentFeedbackSource
 			}
 		}
 	}
-	agentFeed: #RawEventAgentFeed
+	agentFeed: #CompactAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -194,7 +208,7 @@ _agentFeedbackSource: agentFeedbackSource
 			}
 		}
 	}
-	agentFeed: #RawEventAgentFeed
+	agentFeed: #CompactAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}
@@ -231,7 +245,7 @@ _agentFeedbackSource: agentFeedbackSource
 			}
 		}
 	}
-	agentFeed: #RawToolResponseAgentFeed
+	agentFeed: #CompactAgentFeed
 	capture: #CaptureDecisionForInput & {
 		_input: captureInput
 	}

@@ -198,6 +198,9 @@ approval_mode = "approve"
 [mcp_servers.git-mcp-server.tools.git_diff]
 approval_mode = "approve"
 
+[mcp_servers.git-mcp-server.tools.git_diff_unstaged]
+approval_mode = "approve"
+
 [projects."/home/_404/.local/src/fatb4f/*"]
 trust_level = "trusted"
 

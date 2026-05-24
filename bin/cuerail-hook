@@ -149,42 +149,156 @@ if (
     "$wrapped_json" >"$wrapped_with_results_json" || die "could not inject awareness results"
 
   jq -c --argjson maxBytes "${CUERAIL_AGENT_FEEDBACK_MAX_BYTES:-8000}" '
+    def feedable_tool:
+      (.hookInput.tool_name? // "") as $tool |
+      $tool == "mcp__git_mcp_server__git_status" or
+      $tool == "mcp__git_mcp_server__git_diff" or
+      $tool == "mcp__git_mcp_server__git_diff_staged" or
+      $tool == "mcp__git_mcp_server__git_log" or
+      $tool == "mcp__mcp_ripgrep__search" or
+      $tool == "mcp__mcp_ripgrep__list_files";
+    def feed_kind:
+      if ((.hookInput.tool_name? // "") | startswith("mcp__git_mcp_server__")) then "compact.mcp.git"
+      elif ((.hookInput.tool_name? // "") | startswith("mcp__mcp_ripgrep__")) then "compact.mcp.rg"
+      else "compact.hook"
+      end;
     def feedable:
       .hookInput.hook_event_name == "SessionStart" or
-      .hookInput.hook_event_name == "UserPromptSubmit" or
-      .hookInput.hook_event_name == "PreToolUse" or
-      .hookInput.hook_event_name == "PostToolUse";
+      (.hookInput.hook_event_name == "UserPromptSubmit" and false) or
+      ((.hookInput.hook_event_name == "PreToolUse" or .hookInput.hook_event_name == "PostToolUse") and feedable_tool);
+    def feed_decision:
+      {
+        feedable: feedable,
+        reason: (if (feedable and feedable_tool) then "feedable_mcp" elif ((.hookInput.hook_event_name == "PreToolUse" or .hookInput.hook_event_name == "PostToolUse") and (feedable_tool | not)) then "tool_not_feedable" else "persist_only_phase" end)
+      } + (if (.hookInput.tool_name? // "") != "" then {toolName: .hookInput.tool_name} else {} end);
     def compact_awareness:
       {
         executable: (if has("awarenessExecutable") then .awarenessExecutable else true end),
         plan: (.awarenessPlan // null),
         results: (.awarenessResults // [])
       } + (if (.awarenessExecutionReason? // "") != "" then {reason: .awarenessExecutionReason} else {} end);
-    def compact_tool:
+    def response_text:
+      if (.hookInput | has("tool_response") | not) then ""
+      elif (.hookInput.tool_response | type) == "string" then .hookInput.tool_response
+      elif ((.hookInput.tool_response.content? // null) | type) == "array" then
+        [.hookInput.tool_response.content[]? | select((.type? // "") == "text") | .text? // ""] | join("\n")
+      else (.hookInput.tool_response | tostring)
+      end;
+    def response_summary:
+      response_text as $text |
+      ($text | split("\n") | map(select(length > 0))) as $lines |
+      {
+        kind: (if (.hookInput | has("tool_response")) then (.hookInput.tool_response | type) else "none" end),
+        bytes: ($text | length),
+        truncated: (($text | length) > 2000),
+        preview: $text[0:2000]
+      } +
+      (if .hookInput.tool_name == "mcp__mcp_ripgrep__search" then {
+        summary: {
+          kind: "rg.search",
+          path: .hookInput.tool_input.path,
+          pattern: .hookInput.tool_input.pattern,
+          maxResults: (.hookInput.tool_input.maxResults? // null),
+          resultCount: (if ($text | test("^No matches found"; "m")) then 0 else ($lines | length) end),
+          previewMatches: ($lines[0:20])
+        }
+      } elif .hookInput.tool_name == "mcp__mcp_ripgrep__list_files" then {
+        summary: {
+          kind: "rg.list_files",
+          rootPath: .hookInput.tool_input.path,
+          filePattern: (.hookInput.tool_input.filePattern? // null),
+          includeHidden: (.hookInput.tool_input.includeHidden? // null),
+          fileCount: ($lines | length),
+          previewPaths: ($lines[0:40])
+        }
+      } elif .hookInput.tool_name == "mcp__git_mcp_server__git_status" then {
+        summary: {
+          kind: "git.status",
+          branch: (($text | capture("On branch (?<branch>[^\\n]+)")? // {}).branch // null),
+          clean: ($text | contains("working tree clean")),
+          changed: (($text | contains("Changes not staged")) or ($text | contains("Changes to be committed"))),
+          untracked: ($text | contains("Untracked files")),
+          head: null
+        }
+      } elif (.hookInput.tool_name == "mcp__git_mcp_server__git_diff" or .hookInput.tool_name == "mcp__git_mcp_server__git_diff_staged") then {
+        summary: {
+          kind: "git.diff",
+          scope: (if .hookInput.tool_name == "mcp__git_mcp_server__git_diff_staged" then "staged" else "working" end),
+          stat: ($lines | map(select(test("^ [^|]+\\|") or test(" files? changed"))) | .[0:20]),
+          paths: ($lines | map(select(test("^diff --git ")) | sub("^diff --git a/"; "") | sub(" b/.*$"; "")) | .[0:40])
+        }
+      } elif .hookInput.tool_name == "mcp__git_mcp_server__git_log" then {
+        summary: {
+          kind: "git.log",
+          entries: ($lines[0:20])
+        }
+      } else {} end);
+    def compact_tool_pre:
       {} +
       (if (.hookInput.tool_name? // "") != "" then {name: .hookInput.tool_name} else {} end) +
-      (if .hookInput | has("tool_input") then {input: .hookInput.tool_input} else {} end) +
-      (if .hookInput.hook_event_name == "PostToolUse" and (.hookInput | has("tool_response")) then {response: .hookInput.tool_response} else {} end);
-    if feedable then
-      ({
-        schemaVersion: "cuerail.agentFeedback.raw.v1",
+      (if .hookInput | has("tool_input") then {input: .hookInput.tool_input} else {} end);
+    def compact_tool_post:
+      compact_tool_pre +
+      (if (.hookInput.tool_use_id? // "") != "" then {useId: .hookInput.tool_use_id} else {} end) +
+      {response: response_summary};
+    def evidence_pointer:
+      {
+        sessionId: .hookInput.session_id,
+        turnId: (.hookInput.turn_id? // null),
+        toolUseId: (.hookInput.tool_use_id? // null),
+        persistedEventPath: null
+      };
+    def compact_event:
+      if .hookInput.hook_event_name == "SessionStart" then {
+        schemaVersion: "cuerail.agentFeedback.compact.v1",
         hookEventName: .hookInput.hook_event_name,
         sessionId: .hookInput.session_id,
-        input: .hookInput,
-        awareness: compact_awareness
-      } +
-      (if (.hookInput.turn_id? // "") != "" then {turnId: .hookInput.turn_id} else {} end) +
-      (if (.hookInput.cwd? // "") != "" then {cwd: .hookInput.cwd} else {} end) +
-      (if (compact_tool | length) > 0 then {tool: compact_tool} else {} end) |
-      "Cuerail raw hook feedback:\n" + tojson) as $fullContext |
+        input: {
+          hook_event_name: .hookInput.hook_event_name,
+          cwd: (.hookInput.cwd? // null),
+          model: (.hookInput.model? // null),
+          permission_mode: (.hookInput.permission_mode? // null),
+          source: (.hookInput.source? // null)
+        },
+        awareness: compact_awareness,
+        agentFeed: feed_decision,
+        evidence: evidence_pointer
+      }
+      elif .hookInput.hook_event_name == "PreToolUse" then {
+        schemaVersion: "cuerail.agentFeedback.compact.v1",
+        hookEventName: .hookInput.hook_event_name,
+        sessionId: .hookInput.session_id,
+        tool: compact_tool_pre,
+        awareness: compact_awareness,
+        agentFeed: feed_decision,
+        evidence: evidence_pointer
+      } + (if (.hookInput.turn_id? // "") != "" then {turnId: .hookInput.turn_id} else {} end)
+      elif .hookInput.hook_event_name == "PostToolUse" then {
+        schemaVersion: "cuerail.agentFeedback.compact.v1",
+        hookEventName: .hookInput.hook_event_name,
+        sessionId: .hookInput.session_id,
+        tool: compact_tool_post,
+        awareness: compact_awareness,
+        agentFeed: feed_decision,
+        evidence: evidence_pointer
+      } + (if (.hookInput.turn_id? // "") != "" then {turnId: .hookInput.turn_id} else {} end)
+      else empty
+      end;
+    if feedable then
+      ("Cuerail compact hook feedback:\n" + (compact_event | tojson)) as $fullContext |
       . + {
         agentFeedbackContext: ($fullContext[0:$maxBytes]),
         agentFeedbackMaxBytes: $maxBytes,
         agentFeedbackTruncated: (($fullContext | length) > $maxBytes),
-        agentFeedbackSource: "hook.raw"
+        agentFeedbackSource: "hook.compact",
+        agentFeedbackPayloadKind: feed_kind,
+        agentFeedbackReason: feed_decision.reason
       }
     else
-      .
+      . + {
+        agentFeedbackPayloadKind: "none",
+        agentFeedbackReason: feed_decision.reason
+      }
     end' "$wrapped_with_results_json" >"$agent_feedback_json" ||
     die "could not build agent feedback context"
   mv "$agent_feedback_json" "$wrapped_with_results_json" ||

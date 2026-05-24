@@ -71,17 +71,18 @@ into the live agent loop:
   enabled: bool
   channel?: "stdout.additionalContext"
   status:  "not_attempted" | "emitted" | "invalid_output"
-  payloadKind: "none" | "raw.event" | "raw.tool.response"
+  payloadKind: "none" | "compact.hook" | "compact.mcp.git" | "compact.mcp.rg"
   bytes?:  int & >=0
   maxBytes?: int & >=0
   truncated?: bool
   source?: string
+  reason?: "feedable_mcp" | "tool_not_feedable" | "persist_only_phase"
 }
 ```
 
 Full hook evidence stays in the turn artifacts. If a hook emits live context, it
 must be bounded and the manifest must record the channel, status, payload kind,
-byte count, budget, truncation state, and source.
+byte count, budget, truncation state, source, and decision reason.
 
 ## Output taxonomy
 

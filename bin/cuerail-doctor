@@ -347,10 +347,12 @@ jq -n '{
   awarenessResults: [],
   awarenessExecutable: false,
   awarenessExecutionReason: "no_mcp_read_executor",
-  agentFeedbackContext: "Cuerail raw hook feedback:\n{\"schemaVersion\":\"cuerail.agentFeedback.raw.v1\",\"hookEventName\":\"SessionStart\",\"sessionId\":\"session-example\",\"input\":{\"hook_event_name\":\"SessionStart\"},\"awareness\":{\"executable\":false,\"reason\":\"no_mcp_read_executor\",\"plan\":{\"phase\":\"SessionStart\",\"ops\":[]},\"results\":[]}}",
+  agentFeedbackContext: "Cuerail compact hook feedback:\n{\"schemaVersion\":\"cuerail.agentFeedback.compact.v1\",\"hookEventName\":\"SessionStart\",\"sessionId\":\"session-example\",\"input\":{\"hook_event_name\":\"SessionStart\"},\"awareness\":{\"executable\":false,\"reason\":\"no_mcp_read_executor\",\"plan\":{\"phase\":\"SessionStart\",\"ops\":[]},\"results\":[]}}",
   agentFeedbackMaxBytes: 8000,
   agentFeedbackTruncated: false,
-  agentFeedbackSource: "hook.raw"
+  agentFeedbackSource: "hook.compact",
+  agentFeedbackPayloadKind: "compact.hook",
+  agentFeedbackReason: "persist_only_phase"
 }' >"$output_json"
 (
   cd "$CUERAIL_HOME"
@@ -359,13 +361,14 @@ jq -n '{
       .agentFeed.enabled == true and
       .agentFeed.channel == "stdout.additionalContext" and
       .agentFeed.status == "emitted" and
-      .agentFeed.payloadKind == "raw.event" and
+      .agentFeed.payloadKind == "compact.hook" and
       .agentFeed.bytes > 0 and
       .agentFeed.maxBytes == 8000 and
       (.agentFeed.truncated | type) == "boolean" and
-      .agentFeed.source == "hook.raw" and
+      .agentFeed.source == "hook.compact" and
+      .agentFeed.reason == "persist_only_phase" and
       .output.hookSpecificOutput.hookEventName == "SessionStart" and
-      (.output.hookSpecificOutput.additionalContext | contains("cuerail.agentFeedback.raw.v1")) and
+      (.output.hookSpecificOutput.additionalContext | contains("cuerail.agentFeedback.compact.v1")) and
       (.output.hookSpecificOutput.additionalContext | contains("\"executable\":false")) and
       (.output.hookSpecificOutput.additionalContext | contains("no_mcp_read_executor")) and
       (.output.hookSpecificOutput.additionalContext | length) == .agentFeed.bytes and
@@ -383,8 +386,8 @@ jq -n '{
     model: "gpt-4.1",
     permission_mode: "default",
     session_id: "session-example",
-    tool_input: {},
-    tool_name: "mcp-ripgrep",
+    tool_input: {"path": "/tmp/cuerail-example", "pattern": "needle", "maxResults": 10},
+    tool_name: "mcp__mcp_ripgrep__search",
     tool_use_id: "tool-use-example",
     transcript_path: null,
     turn_id: "turn-example"
@@ -392,18 +395,21 @@ jq -n '{
   awarenessResults: [],
   awarenessExecutable: false,
   awarenessExecutionReason: "no_mcp_read_executor",
-  agentFeedbackContext: "Cuerail raw hook feedback:\n{\"schemaVersion\":\"cuerail.agentFeedback.raw.v1\",\"hookEventName\":\"PreToolUse\",\"sessionId\":\"session-example\",\"turnId\":\"turn-example\",\"cwd\":\"/tmp/cuerail-example\",\"input\":{\"hook_event_name\":\"PreToolUse\"},\"awareness\":{\"executable\":false,\"reason\":\"no_mcp_read_executor\",\"plan\":{\"phase\":\"PreToolUse\",\"ops\":[{\"id\":\"pre-tool-use.rg.tool-policy\"}]},\"results\":[]},\"tool\":{\"name\":\"mcp-ripgrep\",\"input\":{}}}",
+  agentFeedbackContext: "Cuerail compact hook feedback:\n{\"schemaVersion\":\"cuerail.agentFeedback.compact.v1\",\"hookEventName\":\"PreToolUse\",\"sessionId\":\"session-example\",\"turnId\":\"turn-example\",\"awareness\":{\"executable\":false,\"reason\":\"no_mcp_read_executor\",\"plan\":{\"phase\":\"PreToolUse\",\"ops\":[{\"id\":\"pre-tool-use.rg.tool-policy\"}]},\"results\":[]},\"tool\":{\"name\":\"mcp__mcp_ripgrep__search\",\"input\":{\"path\":\"/tmp/cuerail-example\",\"pattern\":\"needle\",\"maxResults\":10}}}",
   agentFeedbackMaxBytes: 8000,
   agentFeedbackTruncated: false,
-  agentFeedbackSource: "hook.raw"
+  agentFeedbackSource: "hook.compact",
+  agentFeedbackPayloadKind: "compact.mcp.rg",
+  agentFeedbackReason: "feedable_mcp"
 }' >"$output_json"
 (
   cd "$CUERAIL_HOME"
   cue export ./cue/runtime "$output_json" -e '#HookManifest' |
     jq -e '
       .agentFeed.enabled == true and
-      .agentFeed.payloadKind == "raw.event" and
-      .agentFeed.source == "hook.raw" and
+      .agentFeed.payloadKind == "compact.mcp.rg" and
+      .agentFeed.source == "hook.compact" and
+      .agentFeed.reason == "feedable_mcp" and
       .output.hookSpecificOutput.hookEventName == "PreToolUse" and
       (.output.hookSpecificOutput.additionalContext | contains("\"executable\":false")) and
       (.output.hookSpecificOutput.additionalContext | contains("\"results\":[]")) and
@@ -422,31 +428,71 @@ jq -n '{
     model: "gpt-4.1",
     permission_mode: "default",
     session_id: "session-example",
-    tool_input: {},
-    tool_name: "git-mcp-server",
-    tool_response: {"ok": true},
+    tool_input: {"repo_path": "/tmp/cuerail-example"},
+    tool_name: "mcp__git_mcp_server__git_status",
+    tool_response: {"content": [{"type": "text", "text": "Repository status for /tmp/cuerail-example:\nOn branch main\nnothing to commit, working tree clean\n"}]},
     tool_use_id: "tool-use-example",
     transcript_path: null,
     turn_id: "turn-example"
   },
   awarenessResults: [],
   awarenessExecutable: true,
-  agentFeedbackContext: "Cuerail raw hook feedback:\n{\"schemaVersion\":\"cuerail.agentFeedback.raw.v1\",\"hookEventName\":\"PostToolUse\",\"sessionId\":\"session-example\",\"turnId\":\"turn-example\",\"cwd\":\"/tmp/cuerail-example\",\"input\":{\"hook_event_name\":\"PostToolUse\"},\"awareness\":{\"executable\":true,\"plan\":{\"phase\":\"PostToolUse\",\"ops\":[]},\"results\":[]},\"tool\":{\"name\":\"git-mcp-server\",\"input\":{},\"response\":{\"ok\":true}}}",
+  agentFeedbackContext: "Cuerail compact hook feedback:\n{\"schemaVersion\":\"cuerail.agentFeedback.compact.v1\",\"hookEventName\":\"PostToolUse\",\"sessionId\":\"session-example\",\"turnId\":\"turn-example\",\"awareness\":{\"executable\":true,\"plan\":{\"phase\":\"PostToolUse\",\"ops\":[]},\"results\":[]},\"tool\":{\"name\":\"mcp__git_mcp_server__git_status\",\"input\":{\"repo_path\":\"/tmp/cuerail-example\"},\"response\":{\"kind\":\"object\",\"bytes\":91,\"summary\":{\"kind\":\"git.status\",\"branch\":\"main\",\"clean\":true,\"changed\":false,\"untracked\":false,\"head\":null},\"preview\":\"Repository status\"}}}",
   agentFeedbackMaxBytes: 8000,
   agentFeedbackTruncated: false,
-  agentFeedbackSource: "hook.raw"
+  agentFeedbackSource: "hook.compact",
+  agentFeedbackPayloadKind: "compact.mcp.git",
+  agentFeedbackReason: "feedable_mcp"
 }' >"$output_json"
 (
   cd "$CUERAIL_HOME"
   cue export ./cue/runtime "$output_json" -e '#HookManifest' |
     jq -e '
       .agentFeed.enabled == true and
-      .agentFeed.payloadKind == "raw.tool.response" and
-      .agentFeed.source == "hook.raw" and
+      .agentFeed.payloadKind == "compact.mcp.git" and
+      .agentFeed.source == "hook.compact" and
+      .agentFeed.reason == "feedable_mcp" and
       .output.hookSpecificOutput.hookEventName == "PostToolUse" and
-      (.output.hookSpecificOutput.additionalContext | contains("\"response\":{\"ok\":true}"))
+      (.output.hookSpecificOutput.additionalContext | contains("\"kind\":\"git.status\"")) and
+      (.output.hookSpecificOutput.additionalContext | contains("\"branch\":\"main\"")) and
+      (.output.hookSpecificOutput.additionalContext | contains("tool_response") | not)
     ' >/dev/null
 ) || die "agent_feed_post_tool_use_projection_invalid"
+rm -f "$output_json"
+output_json=
+
+output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-agent-feed.XXXXXX.json")
+jq -n '{
+  hookInput: {
+    cwd: "/tmp/cuerail-example",
+    hook_event_name: "PostToolUse",
+    model: "gpt-4.1",
+    permission_mode: "default",
+    session_id: "session-example",
+    tool_input: {"command": "printf noisy"},
+    tool_name: "Bash",
+    tool_response: "very noisy bash output",
+    tool_use_id: "tool-use-bash-example",
+    transcript_path: null,
+    turn_id: "turn-example"
+  },
+  awarenessResults: [],
+  awarenessExecutable: true,
+  agentFeedbackPayloadKind: "none",
+  agentFeedbackReason: "tool_not_feedable"
+}' >"$output_json"
+(
+  cd "$CUERAIL_HOME"
+  cue export ./cue/runtime "$output_json" -e '#HookManifest' |
+    jq -e '
+      .agentFeed.enabled == false and
+      .agentFeed.status == "not_attempted" and
+      .agentFeed.payloadKind == "none" and
+      .agentFeed.reason == "tool_not_feedable" and
+      (.output.hookSpecificOutput.additionalContext? | not) and
+      .input.tool_response == "very noisy bash output"
+    ' >/dev/null
+) || die "agent_feed_bash_persist_only_projection_invalid"
 rm -f "$output_json"
 output_json=
 
@@ -812,9 +858,9 @@ hardening_events_dir="$doctor_hardening_turns/session-example/turn-example/event
 
 expected_filenames='000001-user-prompt-submit.cue
 000002-post-tool-use.some-other-tool.cue
-000003-post-tool-use.mcp-ripgrep.cue
+000003-post-tool-use.mcp__mcp_ripgrep__search.cue
 000004-pre-tool-use.cue
-000005-post-tool-use.git-mcp-server.cue
+000005-post-tool-use.mcp__git_mcp_server__git_status.cue
 000006-post-tool-use.another-tool.cue
 000007-stop.cue'
 
@@ -851,17 +897,17 @@ done
 
 validate_manifest_schema "$hardening_events_dir/000001-user-prompt-submit.cue"
 validate_manifest_schema "$hardening_events_dir/000002-post-tool-use.some-other-tool.cue"
-validate_manifest_schema "$hardening_events_dir/000003-post-tool-use.mcp-ripgrep.cue"
+validate_manifest_schema "$hardening_events_dir/000003-post-tool-use.mcp__mcp_ripgrep__search.cue"
 validate_manifest_schema "$hardening_events_dir/000004-pre-tool-use.cue"
-validate_manifest_schema "$hardening_events_dir/000005-post-tool-use.git-mcp-server.cue"
+validate_manifest_schema "$hardening_events_dir/000005-post-tool-use.mcp__git_mcp_server__git_status.cue"
 validate_manifest_schema "$hardening_events_dir/000006-post-tool-use.another-tool.cue"
 validate_manifest_schema "$hardening_events_dir/000007-stop.cue"
 
 assert_manifest_content "$hardening_events_dir/000001-user-prompt-submit.cue" "UserPromptSubmit" ""
 assert_manifest_content "$hardening_events_dir/000002-post-tool-use.some-other-tool.cue" "PostToolUse" "some-other-tool"
-assert_manifest_content "$hardening_events_dir/000003-post-tool-use.mcp-ripgrep.cue" "PostToolUse" "mcp-ripgrep"
-assert_manifest_content "$hardening_events_dir/000004-pre-tool-use.cue" "PreToolUse" "mcp-ripgrep"
-assert_manifest_content "$hardening_events_dir/000005-post-tool-use.git-mcp-server.cue" "PostToolUse" "git-mcp-server"
+assert_manifest_content "$hardening_events_dir/000003-post-tool-use.mcp__mcp_ripgrep__search.cue" "PostToolUse" "mcp__mcp_ripgrep__search"
+assert_manifest_content "$hardening_events_dir/000004-pre-tool-use.cue" "PreToolUse" "mcp__mcp_ripgrep__search"
+assert_manifest_content "$hardening_events_dir/000005-post-tool-use.mcp__git_mcp_server__git_status.cue" "PostToolUse" "mcp__git_mcp_server__git_status"
 assert_manifest_content "$hardening_events_dir/000006-post-tool-use.another-tool.cue" "PostToolUse" "another-tool"
 assert_manifest_content "$hardening_events_dir/000007-stop.cue" "Stop" ""
 
