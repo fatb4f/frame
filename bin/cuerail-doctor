@@ -146,15 +146,38 @@ expected_persisted_count=0
   cue export ./cue/runtime -e '#ExampleStopHookOutput' >/dev/null
 )
 
+adapter_json="$doctor_fixture_state/cache/mcp/git-mcp-go/adapter.json"
 CUERAIL_CACHE="$doctor_fixture_state/cache" "$CUERAIL_HOME/bin/cuerail-adapter-export" git-mcp-go >/dev/null
-[ -f "$doctor_fixture_state/cache/mcp/git-mcp-go/adapter.json" ] ||
+[ -f "$adapter_json" ] ||
   die "missing exported git-mcp-go adapter artifact"
 jq -e '
   .mode == "shell" and
   .autoApprove == "allow-read-only" and
-  (.repoRoots | length) == 3
-' "$doctor_fixture_state/cache/mcp/git-mcp-go/adapter.json" >/dev/null ||
+  (.repoRoots | type == "array") and
+  (.repoRoots | length > 0) and
+  all(.repoRoots[]; type == "string" and length > 0) and
+  ([paths as $p | select(($p[-1] | type) == "string" and ($p[-1] | test("mutation"; "i")))] | length == 0)
+' "$adapter_json" >/dev/null ||
   die "invalid exported git-mcp-go adapter artifact"
+
+output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-git-mcp-go-dry-run.XXXXXX.json")
+CUERAIL_CACHE="$doctor_fixture_state/cache" CUERAIL_GIT_MCP_GO_DRY_RUN=1 \
+  "$CUERAIL_HOME/bin/cuerail-git-mcp-go" >"$output_json"
+jq -e . "$output_json" >/dev/null
+
+jq -e --slurpfile adapter "$adapter_json" '
+  .argv[0] == "git-mcp-go" and
+  .argv[1] == "serve" and
+  .argv[2] == "--mode" and
+  .argv[3] == $adapter[0].mode and
+  .argv[4] == ("--auto-approve=" + $adapter[0].autoApprove) and
+  (.argv | map(select(startswith("-r="))) | length) == 1 and
+  (.argv | map(select(startswith("-r=")))[0] | sub("^-r="; "") | split(",")) == $adapter[0].repoRoots
+' "$output_json" >/dev/null ||
+  die "git-mcp-go wrapper dry-run does not match adapter artifact"
+
+rm -f "$output_json"
+output_json=
 
 for fixture in "$CUERAIL_HOME"/test/fixtures/hooks/*.json; do
   [ -f "$fixture" ] || continue

@@ -33,17 +33,24 @@ config="${CUERAIL_GIT_MCP_GO_ADAPTER:-$CUERAIL_CACHE/mcp/git-mcp-go/adapter.json
   die "missing adapter artifact: run cuerail-adapter-export git-mcp-go"
 
 need jq
-need git-mcp-go
 
-mode=$(jq -r '.mode' "$config")
-auto_approve=$(jq -r '.autoApprove' "$config")
-repo_arg=$(jq -r '.repoRoots | join(",")' "$config")
-
-[ "$mode" = "shell" ] || die "unsupported mode in adapter artifact: $mode"
-[ -n "$auto_approve" ] && [ "$auto_approve" != "null" ] ||
+mode=$(jq -er '.mode | select(. == "shell")' "$config") ||
+  die "unsupported mode in adapter artifact"
+auto_approve=$(jq -er '.autoApprove | select(type == "string" and length > 0)' "$config") ||
   die "missing autoApprove in adapter artifact"
-[ -n "$repo_arg" ] && [ "$repo_arg" != "null" ] ||
+repo_arg=$(jq -er '.repoRoots | select(type == "array" and length > 0 and all(.[]; type == "string" and length > 0)) | join(",")' "$config") ||
   die "missing repoRoots in adapter artifact"
+
+if [ "${CUERAIL_GIT_MCP_GO_DRY_RUN:-}" = "1" ]; then
+  jq -n \
+    --arg mode "$mode" \
+    --arg auto_approve "$auto_approve" \
+    --arg repo_arg "$repo_arg" \
+    '{argv: ["git-mcp-go", "serve", "--mode", $mode, "--auto-approve=\($auto_approve)", "-r=\($repo_arg)"]}'
+  exit 0
+fi
+
+need git-mcp-go
 
 exec git-mcp-go serve \
   --mode "$mode" \
