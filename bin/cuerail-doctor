@@ -270,7 +270,7 @@ jq -e '
   .autoApprove == "allow-read-only" and
   .evidence == {
     "cacheRel": "mcp/git-mcp-go/evidence/repos",
-    "captures": ["status", "diff", "log"]
+    "captures": ["status", "diff-unstaged", "diff-staged", "log"]
   } and
   (.repoRoots | type == "array") and
   (.repoRoots | length > 0) and

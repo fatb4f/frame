@@ -4,11 +4,12 @@ package cuerail
 #GitRepoRoot:         =~"^/.*[^/]$"
 #GitObjectID:         =~"^[0-9a-f]{7,64}$"
 #GitCaptureTimestamp: =~"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+#GitRepoDiffScope:    "unstaged" | "staged"
 
 #GitRepoCaptureBase: {
 	schema:     "cuerail.git-mcp-go.capture.v1"
 	adapter:    "git-mcp-go"
-	kind:       "status" | "diff" | "log"
+	kind:       "status" | "diff-unstaged" | "diff-staged" | "log"
 	capturedAt: #GitCaptureTimestamp
 	repo: {
 		name: #GitRepoName
@@ -39,9 +40,10 @@ package cuerail
 }
 
 #GitRepoDiffCapture: #GitRepoCaptureBase & {
-	kind: "diff"
+	kind: "diff-\(payload.scope)"
 	payload: {
-		unstaged: string
+		scope: #GitRepoDiffScope
+		patch: string
 		stat: {
 			files:      int & >=0
 			insertions: int & >=0
@@ -86,7 +88,8 @@ package cuerail
 		root: "/home/_404/src/frame"
 	}
 	payload: {
-		unstaged: ""
+		scope: "unstaged"
+		patch: ""
 		stat: {
 			files:      0
 			insertions: 0

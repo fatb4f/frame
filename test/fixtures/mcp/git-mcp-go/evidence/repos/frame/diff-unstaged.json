@@ -12,11 +12,12 @@
     "autoApprove": "allow-read-only"
   },
   "evidence": {
-    "cacheRel": "mcp/git-mcp-go/evidence/repos/frame/diff.json"
+    "cacheRel": "mcp/git-mcp-go/evidence/repos/frame/diff-unstaged.json"
   },
-  "kind": "diff",
+  "kind": "diff-unstaged",
   "payload": {
-    "unstaged": "",
+    "scope": "unstaged",
+    "patch": "",
     "stat": {
       "files": 0,
       "insertions": 0,

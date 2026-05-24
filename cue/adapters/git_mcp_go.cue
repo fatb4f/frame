@@ -7,7 +7,7 @@ import manifest "github.com/fatb4f/cuerail/cue:cuerail"
 	autoApprove: "allow-read-only"
 	evidence: {
 		cacheRel: "mcp/git-mcp-go/evidence/repos"
-		captures: ["status", "diff", "log"]
+		captures: ["status", "diff-unstaged", "diff-staged", "log"]
 	}
 
 	repos: [
