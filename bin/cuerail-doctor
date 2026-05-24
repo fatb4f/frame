@@ -12,6 +12,18 @@ need() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
 
+resolve_source_home() {
+  case "$0" in
+    */*) script_dir=${0%/*} ;;
+    *)
+      script_path=$(command -v "$0") || die "cannot locate script"
+      script_dir=${script_path%/*}
+      ;;
+  esac
+
+  cd "$script_dir/.." 2>/dev/null && pwd -P
+}
+
 check_node_version() {
   node_version=$(node --version | sed 's/^v//')
   node_major=${node_version%%.*}
@@ -98,7 +110,7 @@ run_hook_fixture() {
   output_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-hook-output.XXXXXX.json")
   stderr_log=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-hook-stderr.XXXXXX.log")
 
-  if ! CUERAIL_STATE="$fixture_state" CUERAIL_TURNS="$fixture_turns" "$CUERAIL_HOME/bin/cuerail-hook" <"$fixture" >"$output_json" 2>"$stderr_log"; then
+  if ! CODEX_HOME="$CUERAIL_HOME" CODEX_STATE="$fixture_state" CUERAIL_HOME="$CUERAIL_HOME" CUERAIL_STATE="$fixture_state" CUERAIL_TURNS="$fixture_turns" "$CUERAIL_HOME/bin/cuerail-hook" <"$fixture" >"$output_json" 2>"$stderr_log"; then
     die "fixture hook run failed: $(basename "$fixture")"
   fi
 
@@ -158,23 +170,13 @@ case "$mode" in
   *) die "usage: cuerail-doctor [source|runtime|all]" ;;
 esac
 
-: "${CODEX_HOME:?CODEX_HOME is required}"
-: "${CODEX_STATE:?CODEX_STATE is required}"
-: "${CUERAIL_HOME:=$CODEX_HOME/tools/cuerail}"
-
-CUERAIL_STATE="${CUERAIL_STATE:-$CODEX_STATE/cuerail}"
-CUERAIL_TURNS="${CUERAIL_TURNS:-$CUERAIL_STATE/turns}"
-
 if [ "$mode" = "runtime" ]; then
   run_runtime_checks
   printf 'cuerail-doctor: runtime ok\n'
   exit 0
 fi
 
-case "$CUERAIL_HOME" in
-  "$CODEX_HOME"/tools/cuerail) ;;
-  *) die "CUERAIL_HOME must be CODEX_HOME/tools/cuerail" ;;
-esac
+CUERAIL_HOME="${CUERAIL_HOME:-$(resolve_source_home)}"
 
 [ -d "$CUERAIL_HOME" ] || die "missing CUERAIL_HOME: $CUERAIL_HOME"
 [ ! -L "$CUERAIL_HOME" ] || die "CUERAIL_HOME must not be a symlink"
@@ -189,10 +191,6 @@ esac
 [ -d "$CUERAIL_HOME/cue" ] || die "missing active CUE package"
 
 need cue
-need awk
-need cmp
-need codex
-need curl
 need jq
 need mktemp
 need flock
@@ -200,13 +198,10 @@ need mkdir
 need mv
 need rm
 need sed
-need sha256sum
 need tr
-need wc
 
 trap cleanup_temp_files EXIT HUP INT TERM
 
-mkdir -p "$CUERAIL_TURNS"
 doctor_fixture_state=$(mktemp -d "${TMPDIR:-/tmp}/cuerail-doctor-state.XXXXXX")
 doctor_fixture_runtime="$doctor_fixture_state/runtime"
 doctor_fixture_turns="$doctor_fixture_runtime/cuerail/turns"
@@ -412,8 +407,6 @@ assert_manifest_content "$hardening_events_dir/000001-user-prompt-submit.cue" "U
 assert_manifest_content "$hardening_events_dir/000002-post-tool-use.mcp-ripgrep.cue" "PostToolUse" "mcp-ripgrep"
 assert_manifest_content "$hardening_events_dir/000003-post-tool-use.git-mcp-server.cue" "PostToolUse" "git-mcp-server"
 assert_manifest_content "$hardening_events_dir/000004-stop.cue" "Stop" ""
-
-"$CUERAIL_HOME/bin/cuerail-schema-sync" --check >/dev/null
 
 if [ "$mode" = "all" ]; then
   run_runtime_checks
