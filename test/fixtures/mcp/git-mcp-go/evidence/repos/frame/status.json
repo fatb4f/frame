@@ -21,5 +21,6 @@
     "clean": true,
     "changed": [],
     "untracked": []
-  }
+  },
+  "readiness": "green"
 }

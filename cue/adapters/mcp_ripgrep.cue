@@ -51,6 +51,24 @@ package cuerail
 		"list-files",
 		"list-file-types",
 	]
+
+	evidence: {
+		cacheRel: "mcp/mcp-ripgrep/evidence/search"
+		captures: ["search"]
+	}
 }
 
 mcpRipgrep: #MCPRipgrepAdapter
+
+#ExpectedMCPRipgrepEvidenceShape: {
+	kind:     "search"
+	cacheRel: "mcp/mcp-ripgrep/evidence/search/<stable-name>.json"
+	green: {
+		adapter:   "mcp-ripgrep"
+		readiness: "green"
+	}
+	yellow: {
+		adapter:   "repo-rg"
+		readiness: "yellow"
+	}
+}

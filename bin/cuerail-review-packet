@@ -37,6 +37,41 @@ status_check() {
   fi
 }
 
+collect_evidence_surface() {
+  dir=$1
+  schema=$2
+  out=$3
+
+  if [ ! -d "$dir" ]; then
+    jq -n '{state: "red", files: []}' >"$out"
+    return 0
+  fi
+
+  find "$dir" -type f -name '*.json' -print |
+    sort |
+    while IFS= read -r evidence; do
+      jq -e --arg schema "$schema" '
+        .schema == $schema and
+        (.readiness == "green" or .readiness == "yellow") and
+        (.adapter | type == "string") and
+        (.kind | type == "string") and
+        (.evidence.cacheRel | type == "string")
+      ' "$evidence" >/dev/null 2>&1 || continue
+
+      jq -c --arg path "$evidence" '{
+        kind,
+        path: $path,
+        cacheRel: .evidence.cacheRel,
+        adapter,
+        readiness
+      }' "$evidence"
+    done |
+    jq -s '{
+      state: (if any(.[]; .readiness == "green") then "green" elif length > 0 then "yellow" else "red" end),
+      files: .
+    }' >"$out"
+}
+
 runtime_requested=false
 token_usage_path=
 commit=HEAD
@@ -72,9 +107,12 @@ esac
 
 CUERAIL_HOME="${CUERAIL_HOME:-$(resolve_source_home)}"
 [ -d "$CUERAIL_HOME" ] || die "missing CUERAIL_HOME: $CUERAIL_HOME"
+CUERAIL_CACHE="${CUERAIL_CACHE:-$CUERAIL_HOME/cache}"
 
 need git
 need jq
+need find
+need sort
 
 commit_sha=$(git -C "$CUERAIL_HOME" rev-parse --verify "$commit^{commit}") ||
   die "unknown commit: $commit"
@@ -84,7 +122,9 @@ subject=$(git -C "$CUERAIL_HOME" show -s --format=%s "$commit_sha")
 changed_files_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-files.XXXXXX.json")
 line_stats_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-stats.XXXXXX.json")
 notes_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-notes.XXXXXX.json")
-trap 'rm -f "$changed_files_json" "$line_stats_json" "$notes_json"' EXIT HUP INT TERM
+git_evidence_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-git-evidence.XXXXXX.json")
+rg_evidence_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-rg-evidence.XXXXXX.json")
+trap 'rm -f "$changed_files_json" "$line_stats_json" "$notes_json" "$git_evidence_json" "$rg_evidence_json"' EXIT HUP INT TERM
 
 git -C "$CUERAIL_HOME" diff-tree -z --root --no-commit-id --name-only -r "$commit_sha" |
   jq -R -s 'split("\u0000") | map(select(length > 0))' >"$changed_files_json"
@@ -155,6 +195,9 @@ if [ -n "$token_usage_path" ] && [ -f "$token_usage_path" ]; then
   token_usage_status=available
 fi
 
+collect_evidence_surface "$CUERAIL_CACHE/mcp/git-mcp-go/evidence/repos" "cuerail.git-mcp-go.capture.v1" "$git_evidence_json"
+collect_evidence_surface "$CUERAIL_CACHE/mcp/mcp-ripgrep/evidence/search" "cuerail.mcp-ripgrep.search.v1" "$rg_evidence_json"
+
 jq -n \
   --arg commit "$commit_sha" \
   --arg parent "$parent_sha" \
@@ -169,6 +212,8 @@ jq -n \
   --arg tokenUsageAvailable "$token_usage_available" \
   --arg tokenUsageStatus "$token_usage_status" \
   --arg tokenUsageSource "$token_usage_source" \
+  --slurpfile gitEvidence "$git_evidence_json" \
+  --slurpfile rgEvidence "$rg_evidence_json" \
   --slurpfile notes "$notes_json" \
   '{
     commit: $commit,
@@ -195,6 +240,10 @@ jq -n \
       status: $tokenUsageStatus,
       path: (if $tokenUsagePath == "" then null else $tokenUsagePath end),
       source: (if $tokenUsageSource == "" then null else $tokenUsageSource end)
+    },
+    mcpEvidence: {
+      git: $gitEvidence[0],
+      rg: $rgEvidence[0]
     },
     notes: $notes[0]
   }'

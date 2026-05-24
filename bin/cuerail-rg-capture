@@ -1,0 +1,216 @@
+#!/usr/bin/env sh
+set -eu
+LC_ALL=C
+export LC_ALL
+
+die() {
+  printf 'cuerail-rg-capture: %s\n' "$1" >&2
+  exit 1
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+usage() {
+  cat >&2 <<'USAGE'
+usage: cuerail-rg-capture [--adapter mcp|fallback] [--from-json PATH] [--repo ROOT] [--repo-name NAME] [--path PATH] [--mode literal|regex] [--max-results N] QUERY
+
+MCP mode requires --from-json with mcp-ripgrep tool output. Fallback mode invokes
+repo-rg and emits yellow evidence.
+USAGE
+  exit 2
+}
+
+stable_name() {
+  printf '%s' "$1" |
+    tr '/[:space:]' '--' |
+    tr -cd 'A-Za-z0-9._-' |
+    sed 's/--*/-/g; s/^-//; s/-$//' |
+    cut -c1-80
+}
+
+resolve_source_home() {
+  case "$0" in
+    */*) script_dir=${0%/*} ;;
+    *)
+      script_path=$(command -v "$0") || die "cannot locate script"
+      script_dir=${script_path%/*}
+      ;;
+  esac
+  cd "$script_dir/.." 2>/dev/null && pwd -P
+}
+
+adapter=mcp
+from_json=
+repo_root=.
+repo_name=
+search_path=.
+mode=literal
+max_results=80
+query=
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --adapter)
+      [ "$#" -ge 2 ] || usage
+      adapter=$2
+      shift 2
+      ;;
+    --from-json)
+      [ "$#" -ge 2 ] || usage
+      from_json=$2
+      shift 2
+      ;;
+    --repo)
+      [ "$#" -ge 2 ] || usage
+      repo_root=$2
+      shift 2
+      ;;
+    --repo-name)
+      [ "$#" -ge 2 ] || usage
+      repo_name=$2
+      shift 2
+      ;;
+    --path)
+      [ "$#" -ge 2 ] || usage
+      search_path=$2
+      shift 2
+      ;;
+    --mode)
+      [ "$#" -ge 2 ] || usage
+      mode=$2
+      shift 2
+      ;;
+    --max-results)
+      [ "$#" -ge 2 ] || usage
+      max_results=$2
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      ;;
+    -*)
+      usage
+      ;;
+    *)
+      [ -z "$query" ] || usage
+      query=$1
+      shift
+      ;;
+  esac
+done
+
+[ -n "$query" ] || usage
+case "$adapter" in
+  mcp|fallback) ;;
+  *) die "adapter must be mcp or fallback" ;;
+esac
+case "$mode" in
+  literal|regex) ;;
+  *) die "mode must be literal or regex" ;;
+esac
+case "$max_results" in
+  ''|*[!0-9]*) die "max-results must be an integer" ;;
+esac
+[ "$max_results" -gt 0 ] && [ "$max_results" -le 200 ] ||
+  die "max-results must be between 1 and 200"
+
+CUERAIL_HOME="${CUERAIL_HOME:-$(resolve_source_home)}"
+CUERAIL_CACHE="${CUERAIL_CACHE:-$CUERAIL_HOME/cache}"
+repo_root=$(cd "$repo_root" 2>/dev/null && pwd -P) || die "repo root does not exist"
+repo_root=$(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null) || die "not inside a git repository"
+[ -n "$repo_name" ] || repo_name=${repo_root##*/}
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+name=$(stable_name "$repo_name-$mode-$query")
+[ -n "$name" ] || name=search
+out_rel="mcp/mcp-ripgrep/evidence/search/$name.json"
+out="$CUERAIL_CACHE/$out_rel"
+tmp="$out.tmp.$$.json"
+payload_tmp=$(mktemp "${TMPDIR:-/tmp}/cuerail-rg-capture-payload.XXXXXX.json")
+trap 'rm -f "$tmp" "$payload_tmp"' EXIT HUP INT TERM
+
+need date
+need git
+need jq
+need mkdir
+need mv
+need sed
+need tr
+
+if [ "$adapter" = mcp ]; then
+  [ -n "$from_json" ] || die "MCP mode requires --from-json PATH"
+  [ -f "$from_json" ] || die "missing MCP output: $from_json"
+  adapter_id=mcp-ripgrep
+  readiness=green
+  source_mode=mcp
+  jq -e --arg root "$repo_root" '
+    def rows:
+      .[] | select(.type == "text") | .text | split("\n")[] | select(length > 0);
+    def relpath:
+      if startswith($root + "/") then .[($root | length + 1):] else . end;
+    if type == "object" and has("matches") then
+      [.matches[]? | {
+        path: (.path | relpath),
+        line: (.line // 1),
+        text: (.text // .snippet // "")
+      }]
+    elif type == "array" then
+      [rows | capture("^(?<path>.*):(?<line>[0-9]+):(?<text>.*)$") | {
+        path: (.path | relpath),
+        line: (.line | tonumber),
+        text: .text
+      }]
+    else
+      empty
+    end
+  ' "$from_json" >"$payload_tmp" || die "cannot derive mcp-ripgrep results"
+else
+  adapter_id=repo-rg
+  readiness=yellow
+  source_mode=shell
+  "$CUERAIL_HOME/bin/repo-rg" "$query" "$repo_root/$search_path" "$mode" "$max_results" |
+    jq '[.matches[]? | {path, line, text}]' >"$payload_tmp"
+fi
+
+mkdir -p "${out%/*}"
+jq -n \
+  --arg capturedAt "$captured_at" \
+  --arg adapter "$adapter_id" \
+  --arg readiness "$readiness" \
+  --arg repoName "$repo_name" \
+  --arg repoRoot "$repo_root" \
+  --arg pattern "$query" \
+  --arg mode "$mode" \
+  --arg searchPath "$search_path" \
+  --arg stableName "$name" \
+  --arg cacheRel "$out_rel" \
+  --arg sourceMode "$source_mode" \
+  --argjson maxResults "$max_results" \
+  --slurpfile results "$payload_tmp" \
+  '{
+    schema: "cuerail.mcp-ripgrep.search.v1",
+    adapter: $adapter,
+    readiness: $readiness,
+    kind: "search",
+    capturedAt: $capturedAt,
+    repo: {name: $repoName, root: $repoRoot},
+    query: {
+      pattern: $pattern,
+      mode: $mode,
+      path: $searchPath,
+      maxResults: $maxResults,
+      stableName: $stableName
+    },
+    source: {tool: $adapter, mode: $sourceMode},
+    evidence: {cacheRel: $cacheRel},
+    results: $results[0],
+    truncated: false
+  }' >"$tmp"
+
+(
+  cd "$CUERAIL_HOME"
+  cue vet -c=false ./cue/runtime "$tmp" -d '#RgSearchCapture'
+) || die "invalid rg evidence: $out_rel"
+mv "$tmp" "$out"
+printf '%s\n' "$out"

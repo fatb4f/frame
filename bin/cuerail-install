@@ -82,6 +82,8 @@ write_wrapper cuerail-schema-sync "$CUERAIL_HOME/bin/cuerail-schema-sync"
 write_wrapper cuerail-run "$CUERAIL_HOME/bin/cuerail-run"
 write_wrapper cuerail-mcp-ripgrep "$CUERAIL_HOME/bin/cuerail-mcp-ripgrep"
 write_wrapper cuerail-mcp-capture "$CUERAIL_HOME/bin/cuerail-mcp-capture"
+write_wrapper cuerail-git-capture "$CUERAIL_HOME/bin/cuerail-git-capture"
+write_wrapper cuerail-rg-capture "$CUERAIL_HOME/bin/cuerail-rg-capture"
 
 chmod 700 "$CUERAIL_STATE" "$CUERAIL_TURNS" 2>/dev/null || true
 

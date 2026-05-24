@@ -3,6 +3,18 @@ package cuerail
 #ReviewCheckStatus: "ok" | "failed" | "skipped"
 #ReviewTokenUsageStatus: "available" | "unavailable"
 #ReviewTokenUsageSource: "explicit" | "auto"
+#ReviewEvidenceState: "green" | "yellow" | "red"
+
+#ReviewEvidenceSurface: {
+	state: #ReviewEvidenceState
+	files: [...{
+		kind:      string
+		path:      string
+		cacheRel:  string
+		adapter:   string
+		readiness: #ReviewEvidenceState & ("green" | "yellow")
+	}]
+}
 
 #ReviewPacket: {
 	commit:  =~"^[0-9a-f]{40}$"
@@ -37,6 +49,11 @@ package cuerail
 		status:    #ReviewTokenUsageStatus
 		path:      null | string
 		source:    null | #ReviewTokenUsageSource
+	}
+
+	mcpEvidence: {
+		git: #ReviewEvidenceSurface
+		rg:  #ReviewEvidenceSurface
 	}
 
 	notes: [...string]

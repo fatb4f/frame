@@ -19,11 +19,14 @@
     "commits": [
       {
         "commit": "8568c54",
-        "parents": ["e0b3de6"],
+        "parents": [
+          "e0b3de6"
+        ],
         "author": "Cuerail",
         "date": "2026-05-23T19:59:00Z",
         "subject": "chore: define git capture evidence"
       }
     ]
-  }
+  },
+  "readiness": "green"
 }

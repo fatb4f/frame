@@ -4,13 +4,16 @@ package cuerail
 #GitRepoRoot:            =~"^/.*[^/]$"
 #GitObjectID:            =~"^[0-9a-f]{7,64}$"
 #GitCaptureTimestamp:    =~"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
-#GitRepoCaptureKind:     "status" | "diff-unstaged" | "diff-staged" | "log"
-#GitRepoDiffCaptureKind: "diff-unstaged" | "diff-staged"
-#GitRepoDiffScope:       "unstaged" | "staged"
+#GitRepoCaptureKind:      "status" | "diff-unstaged" | "diff-staged" | "log"
+#GitRepoDiffCaptureKind:  "diff-unstaged" | "diff-staged"
+#GitRepoDiffScope:        "unstaged" | "staged"
+#GitRepoCaptureAdapter:   "git-mcp-go" | "repo-git"
+#GitRepoCaptureReadiness: "green" | "yellow"
 
 #GitRepoCaptureBase: {
 	schema:     "cuerail.git-mcp-go.capture.v1"
-	adapter:    "git-mcp-go"
+	adapter:    #GitRepoCaptureAdapter
+	readiness:  #GitRepoCaptureReadiness
 	kind:       #GitRepoCaptureKind
 	capturedAt: #GitCaptureTimestamp
 	repo: {
@@ -18,9 +21,9 @@ package cuerail
 		root: #GitRepoRoot
 	}
 	source: {
-		tool:        "git-mcp-go"
+		tool:        adapter
 		mode:        "shell"
-		autoApprove: "allow-read-only"
+		autoApprove: "allow-read-only" | null
 	}
 	evidence: {
 		cacheRel: "mcp/git-mcp-go/evidence/repos/\(repo.name)/\(kind).json"
@@ -28,7 +31,25 @@ package cuerail
 	...
 }
 
-#GitRepoCapture: #GitRepoStatusCapture | #GitRepoDiffCapture | #GitRepoLogCapture
+#GitRepoMCPCapture: #GitRepoCaptureBase & {
+	adapter:   "git-mcp-go"
+	readiness: "green"
+	source: {
+		tool:        "git-mcp-go"
+		autoApprove: "allow-read-only"
+	}
+}
+
+#GitRepoFallbackCapture: #GitRepoCaptureBase & {
+	adapter:   "repo-git"
+	readiness: "yellow"
+	source: {
+		tool:        "repo-git"
+		autoApprove: null
+	}
+}
+
+#GitRepoCapture: (#GitRepoMCPCapture | #GitRepoFallbackCapture) & (#GitRepoStatusCapture | #GitRepoDiffCapture | #GitRepoLogCapture)
 
 #GitRepoStatusCapture: #GitRepoCaptureBase & {
 	kind: "status"
@@ -68,7 +89,9 @@ package cuerail
 	}
 }
 
-#ExampleGitRepoStatusCapture: #GitRepoStatusCapture & {
+#ExampleGitRepoStatusCapture: #GitRepoMCPCapture & #GitRepoStatusCapture & {
+	adapter:    "git-mcp-go"
+	readiness:  "green"
 	capturedAt: "2026-05-23T20:00:00Z"
 	repo: {
 		name: "frame"
@@ -83,7 +106,9 @@ package cuerail
 	}
 }
 
-#ExampleGitRepoUnstagedDiffCapture: #GitRepoDiffCapture & {
+#ExampleGitRepoUnstagedDiffCapture: #GitRepoMCPCapture & #GitRepoDiffCapture & {
+	adapter:    "git-mcp-go"
+	readiness:  "green"
 	capturedAt: "2026-05-23T20:00:00Z"
 	repo: {
 		name: "frame"
@@ -101,7 +126,9 @@ package cuerail
 	}
 }
 
-#ExampleGitRepoStagedDiffCapture: #GitRepoDiffCapture & {
+#ExampleGitRepoStagedDiffCapture: #GitRepoMCPCapture & #GitRepoDiffCapture & {
+	adapter:    "git-mcp-go"
+	readiness:  "green"
 	capturedAt: "2026-05-23T20:00:00Z"
 	repo: {
 		name: "frame"
@@ -119,7 +146,9 @@ package cuerail
 	}
 }
 
-#ExampleGitRepoLogCapture: #GitRepoLogCapture & {
+#ExampleGitRepoLogCapture: #GitRepoMCPCapture & #GitRepoLogCapture & {
+	adapter:    "git-mcp-go"
+	readiness:  "green"
 	capturedAt: "2026-05-23T20:00:00Z"
 	repo: {
 		name: "frame"

@@ -100,6 +100,8 @@ cleanup_temp_files() {
   [ -n "${expected_git_fixtures_json:-}" ] && rm -f "$expected_git_fixtures_json"
   [ -n "${expected_git_fixture_paths:-}" ] && rm -f "$expected_git_fixture_paths"
   [ -n "${actual_git_fixture_paths:-}" ] && rm -f "$actual_git_fixture_paths"
+  [ -n "${generated_git_capture_paths:-}" ] && rm -f "$generated_git_capture_paths"
+  [ -n "${generated_rg_capture_path:-}" ] && rm -f "$generated_rg_capture_path"
   [ -n "${token_usage_json:-}" ] && rm -f "$token_usage_json"
   [ -n "${manifest_json:-}" ] && rm -f "$manifest_json"
   [ -n "${review_packet_json:-}" ] && rm -f "$review_packet_json"
@@ -195,6 +197,8 @@ CUERAIL_HOME="${CUERAIL_HOME:-$(resolve_source_home)}"
 [ -x "$CUERAIL_HOME/bin/cuerail-mcp-ripgrep" ] || die "missing executable bin/cuerail-mcp-ripgrep"
 [ -x "$CUERAIL_HOME/bin/cuerail-mcp-capture" ] || die "missing executable bin/cuerail-mcp-capture"
 [ -x "$CUERAIL_HOME/bin/cuerail-git-mcp-go" ] || die "missing executable bin/cuerail-git-mcp-go"
+[ -x "$CUERAIL_HOME/bin/cuerail-git-capture" ] || die "missing executable bin/cuerail-git-capture"
+[ -x "$CUERAIL_HOME/bin/cuerail-rg-capture" ] || die "missing executable bin/cuerail-rg-capture"
 [ -x "$CUERAIL_HOME/bin/git-mcp-go-cuerail" ] || die "missing executable bin/git-mcp-go-cuerail"
 [ -d "$CUERAIL_HOME/cue" ] || die "missing active CUE package"
 
@@ -240,6 +244,8 @@ expected_persisted_count=0
   cue export ./cue/runtime -e '#ExampleGitRepoUnstagedDiffCapture' >/dev/null
   cue export ./cue/runtime -e '#ExampleGitRepoStagedDiffCapture' >/dev/null
   cue export ./cue/runtime -e '#ExampleGitRepoLogCapture' >/dev/null
+  cue export ./cue/runtime -e '#ExampleRgSearchCapture' >/dev/null
+  cue export ./cue/runtime -e '#ExampleRgSearchFallbackCapture' >/dev/null
   cue export ./cue/runtime -e '#ExampleTokenUsageEvidence' >/dev/null
 )
 
@@ -357,7 +363,11 @@ jq -e '
   .requires.rg == true and
   .trust.policyBoundary == false and
   .trust.sandboxBoundary == false and
-  ([.tools[]] | index("search") != null)
+  ([.tools[]] | index("search") != null) and
+  .evidence == {
+    "cacheRel": "mcp/mcp-ripgrep/evidence/search",
+    "captures": ["search"]
+  }
 ' "$mcp_adapter_json" >/dev/null ||
   die "invalid exported mcp-ripgrep adapter projection"
 rm -f "$mcp_adapter_json"
@@ -435,6 +445,72 @@ rm -f "$expected_git_fixtures_json" "$expected_git_fixture_paths" "$actual_git_f
 expected_git_fixtures_json=
 expected_git_fixture_paths=
 actual_git_fixture_paths=
+
+generated_git_capture_paths=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-git-capture-paths.XXXXXX")
+CUERAIL_CACHE="$doctor_fixture_state/cache" "$CUERAIL_HOME/bin/cuerail-git-capture" \
+  --adapter fallback --repo "$CUERAIL_HOME" --repo-name cuerail >"$generated_git_capture_paths"
+git_yellow_count=0
+while IFS= read -r evidence; do
+  [ -f "$evidence" ] || die "generated git evidence missing: $evidence"
+  (
+    cd "$CUERAIL_HOME"
+    cue vet -c=false ./cue/runtime "$evidence" -d '#GitRepoCapture'
+  ) || die "schema_invalid_generated_git_capture: $(basename "$evidence")"
+  jq -e '
+    .adapter == "repo-git" and
+    .readiness == "yellow" and
+    .source.tool == "repo-git" and
+    (.evidence.cacheRel | startswith("mcp/git-mcp-go/evidence/repos/cuerail/"))
+  ' "$evidence" >/dev/null ||
+    die "generated git fallback evidence not explicitly yellow: $evidence"
+  git_yellow_count=$((git_yellow_count + 1))
+done <"$generated_git_capture_paths"
+[ "$git_yellow_count" -eq 3 ] ||
+  die "wrong generated git fallback evidence count: $git_yellow_count"
+rm -f "$generated_git_capture_paths"
+generated_git_capture_paths=
+
+generated_rg_capture_path=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-rg-capture-path.XXXXXX")
+CUERAIL_CACHE="$doctor_fixture_state/cache" "$CUERAIL_HOME/bin/cuerail-rg-capture" \
+  --adapter fallback --repo "$CUERAIL_HOME" --repo-name cuerail --mode literal --max-results 5 \
+  'cuerail-doctor' >"$generated_rg_capture_path"
+rg_evidence=$(sed -n '1p' "$generated_rg_capture_path")
+[ -f "$rg_evidence" ] || die "generated rg evidence missing: $rg_evidence"
+(
+  cd "$CUERAIL_HOME"
+  cue vet -c=false ./cue/runtime "$rg_evidence" -d '#RgSearchCapture'
+) || die "schema_invalid_generated_rg_capture: $(basename "$rg_evidence")"
+jq -e '
+  .adapter == "repo-rg" and
+  .readiness == "yellow" and
+  .source.tool == "repo-rg" and
+  .query.pattern == "cuerail-doctor" and
+  (.results | type == "array") and
+  (.evidence.cacheRel | startswith("mcp/mcp-ripgrep/evidence/search/"))
+' "$rg_evidence" >/dev/null ||
+  die "generated rg fallback evidence not explicitly yellow: $rg_evidence"
+rm -f "$generated_rg_capture_path"
+generated_rg_capture_path=
+
+review_packet_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-review-packet.XXXXXX.json")
+CUERAIL_CACHE="$doctor_fixture_state/cache" CUERAIL_REVIEW_PACKET_SKIP_SOURCE_DOCTOR=1 \
+  "$CUERAIL_HOME/bin/cuerail-review-packet" >"$review_packet_json"
+jq -e . "$review_packet_json" >/dev/null
+(
+  cd "$CUERAIL_HOME"
+  cue vet -c=false ./cue/runtime "$review_packet_json" -d '#ReviewPacket'
+) || die "invalid review packet output with mcp evidence"
+jq -e '
+  .mcpEvidence.git.state == "yellow" and
+  (.mcpEvidence.git.files | length) == 3 and
+  all(.mcpEvidence.git.files[]; .adapter == "repo-git" and .readiness == "yellow") and
+  .mcpEvidence.rg.state == "yellow" and
+  (.mcpEvidence.rg.files | length) == 1 and
+  all(.mcpEvidence.rg.files[]; .adapter == "repo-rg" and .readiness == "yellow")
+' "$review_packet_json" >/dev/null ||
+  die "review packet did not consume generated fallback evidence"
+rm -f "$review_packet_json"
+review_packet_json=
 
 for fixture in "$CUERAIL_HOME"/test/fixtures/hooks/*.json; do
   [ -f "$fixture" ] || continue
@@ -541,4 +617,6 @@ if [ "$mode" = "all" ]; then
   run_runtime_checks
 fi
 
+printf 'cuerail-doctor: git_mcp: yellow (fallback evidence valid; no live git-mcp-go capture payload checked)\n'
+printf 'cuerail-doctor: rg_mcp: yellow (fallback evidence valid; no live mcp-ripgrep capture payload checked)\n'
 printf 'cuerail-doctor: %s ok\n' "$mode"

@@ -1,0 +1,223 @@
+#!/usr/bin/env sh
+set -eu
+LC_ALL=C
+export LC_ALL
+
+die() {
+  printf 'cuerail-git-capture: %s\n' "$1" >&2
+  exit 1
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+usage() {
+  cat >&2 <<'USAGE'
+usage: cuerail-git-capture [--adapter mcp|fallback] [--from-json PATH] [--repo ROOT] [--repo-name NAME] [KIND]
+
+KIND is status, diff-unstaged, or diff-staged. Default: all.
+
+MCP mode requires --from-json with already captured MCP payload JSON. Fallback
+mode invokes repo-git and emits yellow evidence.
+USAGE
+  exit 2
+}
+
+json_string() {
+  printf '%s' "$1" | awk '
+    BEGIN { ORS = ""; first = 1 }
+    {
+      gsub(/\\/, "\\\\")
+      gsub(/"/, "\\\"")
+      gsub(/\t/, "\\t")
+      if (!first) printf "\\n"
+      printf "%s", $0
+      first = 0
+    }
+  '
+}
+
+resolve_source_home() {
+  case "$0" in
+    */*) script_dir=${0%/*} ;;
+    *)
+      script_path=$(command -v "$0") || die "cannot locate script"
+      script_dir=${script_path%/*}
+      ;;
+  esac
+  cd "$script_dir/.." 2>/dev/null && pwd -P
+}
+
+adapter=mcp
+from_json=
+repo_root=.
+repo_name=
+kind=all
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --adapter)
+      [ "$#" -ge 2 ] || usage
+      adapter=$2
+      shift 2
+      ;;
+    --from-json)
+      [ "$#" -ge 2 ] || usage
+      from_json=$2
+      shift 2
+      ;;
+    --repo)
+      [ "$#" -ge 2 ] || usage
+      repo_root=$2
+      shift 2
+      ;;
+    --repo-name)
+      [ "$#" -ge 2 ] || usage
+      repo_name=$2
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      ;;
+    -*)
+      usage
+      ;;
+    *)
+      [ "$kind" = all ] || usage
+      kind=$1
+      shift
+      ;;
+  esac
+done
+
+case "$adapter" in
+  mcp|fallback) ;;
+  *) die "adapter must be mcp or fallback" ;;
+esac
+case "$kind" in
+  all|status|diff-unstaged|diff-staged) ;;
+  *) die "kind must be status, diff-unstaged, or diff-staged" ;;
+esac
+
+CUERAIL_HOME="${CUERAIL_HOME:-$(resolve_source_home)}"
+CUERAIL_CACHE="${CUERAIL_CACHE:-$CUERAIL_HOME/cache}"
+repo_root=$(cd "$repo_root" 2>/dev/null && pwd -P) || die "repo root does not exist"
+repo_root=$(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null) || die "not inside a git repository"
+[ -n "$repo_name" ] || repo_name=${repo_root##*/}
+captured_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+need date
+need git
+need jq
+need mkdir
+need mv
+
+write_capture() {
+  capture_kind=$1
+  payload_json=$2
+  out_rel="mcp/git-mcp-go/evidence/repos/$repo_name/$capture_kind.json"
+  out="$CUERAIL_CACHE/$out_rel"
+  tmp="$out.tmp.$$.json"
+  mkdir -p "${out%/*}"
+
+  if [ "$adapter" = mcp ]; then
+    adapter_id=git-mcp-go
+    readiness=green
+    auto_approve=allow-read-only
+  else
+    adapter_id=repo-git
+    readiness=yellow
+    auto_approve=
+  fi
+
+  jq -n \
+    --arg capturedAt "$captured_at" \
+    --arg adapter "$adapter_id" \
+    --arg readiness "$readiness" \
+    --arg kind "$capture_kind" \
+    --arg repoName "$repo_name" \
+    --arg repoRoot "$repo_root" \
+    --arg cacheRel "$out_rel" \
+    --arg autoApprove "$auto_approve" \
+    --slurpfile payload "$payload_json" \
+    '{
+      schema: "cuerail.git-mcp-go.capture.v1",
+      adapter: $adapter,
+      readiness: $readiness,
+      capturedAt: $capturedAt,
+      repo: {name: $repoName, root: $repoRoot},
+      source: {
+        tool: $adapter,
+        mode: "shell",
+        autoApprove: (if $autoApprove == "" then null else $autoApprove end)
+      },
+      evidence: {cacheRel: $cacheRel},
+      kind: $kind,
+      payload: $payload[0]
+    }' >"$tmp"
+
+  (
+    cd "$CUERAIL_HOME"
+    cue vet -c=false ./cue/runtime "$tmp" -d '#GitRepoCapture'
+  ) || die "invalid git evidence: $out_rel"
+  mv "$tmp" "$out"
+  printf '%s\n' "$out"
+}
+
+fallback_payload() {
+  capture_kind=$1
+  tmp=$2
+  case "$capture_kind" in
+    status)
+      "$CUERAIL_HOME/bin/repo-git" status "$repo_root" |
+        jq '{head, branch, clean, changed: [.changed[]? | if type == "string" then . else .path end], untracked}' >"$tmp"
+      ;;
+    diff-unstaged)
+      "$CUERAIL_HOME/bin/repo-git" diff "$repo_root" |
+        jq '{scope: "unstaged", patch: .diff.unstaged, stat: {files: 0, insertions: 0, deletions: 0}, paths: []}' >"$tmp"
+      ;;
+    diff-staged)
+      "$CUERAIL_HOME/bin/repo-git" staged "$repo_root" |
+        jq '{scope: "staged", patch: .diff.staged, stat: {files: 0, insertions: 0, deletions: 0}, paths: []}' >"$tmp"
+      ;;
+  esac
+}
+
+mcp_payload() {
+  capture_kind=$1
+  tmp=$2
+  [ -n "$from_json" ] || die "MCP mode requires --from-json PATH"
+  [ -f "$from_json" ] || die "missing MCP payload: $from_json"
+  jq -e --arg kind "$capture_kind" '
+    if type == "object" and has("kind") and .kind == $kind and has("payload") then
+      .payload
+    elif type == "object" then
+      .
+    else
+      empty
+    end
+  ' "$from_json" >"$tmp" || die "cannot derive MCP payload for $capture_kind"
+}
+
+emit_one() {
+  capture_kind=$1
+  payload_tmp=$(mktemp "${TMPDIR:-/tmp}/cuerail-git-capture-payload.XXXXXX.json")
+  trap 'rm -f "$payload_tmp"' EXIT HUP INT TERM
+  if [ "$adapter" = mcp ]; then
+    mcp_payload "$capture_kind" "$payload_tmp"
+  else
+    fallback_payload "$capture_kind" "$payload_tmp"
+  fi
+  write_capture "$capture_kind" "$payload_tmp"
+  rm -f "$payload_tmp"
+  trap - EXIT HUP INT TERM
+}
+
+if [ "$kind" = all ]; then
+  emit_one status
+  emit_one diff-unstaged
+  emit_one diff-staged
+else
+  emit_one "$kind"
+fi
