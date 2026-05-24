@@ -35,8 +35,14 @@ run_fixture() {
   fixture=$1
 
   output_json=$(mktemp "${TMPDIR:-/tmp}/frame-doctor-output.XXXXXX.json")
-  CODEX_STATE="$doctor_state" FRAME_HOME="$FRAME_HOME" "$FRAME_HOME/bin/frame-codex-hook" \
-    <"$fixture" >"$output_json"
+  if [ "$live_mcp" = "true" ]; then
+    CODEX_STATE="$doctor_state" FRAME_HOME="$FRAME_HOME" \
+      CUERAIL_MCP_READ_EXECUTOR="$FRAME_HOME/bin/frame-mcp-read-executor" \
+      "$FRAME_HOME/bin/frame-codex-hook" <"$fixture" >"$output_json"
+  else
+    CODEX_STATE="$doctor_state" FRAME_HOME="$FRAME_HOME" "$FRAME_HOME/bin/frame-codex-hook" \
+      <"$fixture" >"$output_json"
+  fi
   jq -e . "$output_json" >/dev/null
   rm -f "$output_json"
   output_json=
@@ -89,18 +95,34 @@ assert_awareness_trace() {
     cue export "$manifest" >"$manifest_json"
   ) || die "could not export manifest: $(basename "$manifest")"
 
-  jq -e --arg phase "$expected_phase" --argjson expectedOps "$expected_ops" '
+  jq -e --arg phase "$expected_phase" --argjson expectedOps "$expected_ops" --argjson liveMcp "$live_mcp" '
     .awareness.plan.phase == $phase and
     (.awareness.plan.ops | length) == $expectedOps and
     (.awareness.results | length) == $expectedOps and
     all(.awareness.plan.ops[]?; .substrate == "mcp" and .readOnly == true and (.tool == "git-mcp-server" or .tool == "mcp-ripgrep")) and
-    all(.awareness.results[]?; .substrate == "mcp" and (.tool == "git-mcp-server" or .tool == "mcp-ripgrep") and (has("output") | not))
+    all(.awareness.results[]?; .substrate == "mcp" and (.tool == "git-mcp-server" or .tool == "mcp-ripgrep") and (has("output") | not)) and
+    (
+      ($liveMcp | not) or
+      all(.awareness.results[]?; .status == "ok" and has("raw") and (.raw | type) != "string" and (has("rawText") | not))
+    )
   ' "$manifest_json" >/dev/null ||
     die "wrong_awareness_trace: $(basename "$manifest")"
 
   rm -f "$manifest_json"
   manifest_json=
 }
+
+live_mcp=false
+case "${1:-}" in
+  "")
+    ;;
+  --live-mcp)
+    live_mcp=true
+    ;;
+  *)
+    die "usage: frame-doctor [--live-mcp]"
+    ;;
+esac
 
 FRAME_HOME="${FRAME_HOME:-$(resolve_source_home)}"
 
@@ -111,6 +133,9 @@ need mktemp
 need rm
 
 [ -x "$FRAME_HOME/bin/frame-codex-hook" ] || die "missing executable bin/frame-codex-hook"
+if [ "$live_mcp" = "true" ]; then
+  [ -x "$FRAME_HOME/bin/frame-mcp-read-executor" ] || die "missing executable bin/frame-mcp-read-executor"
+fi
 
 trap cleanup_temp_files EXIT HUP INT TERM
 

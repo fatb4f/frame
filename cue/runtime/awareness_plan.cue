@@ -1,5 +1,7 @@
 package cuerail
 
+import manifest "github.com/fatb4f/cuerail/cue:cuerail"
+
 #ReadKind: "git" | "rg"
 
 #ReadSubstrate: "mcp"
@@ -7,6 +9,8 @@ package cuerail
 #ReadTool: "git-mcp-server" | "mcp-ripgrep"
 
 #ReadStatus: "ok" | "error"
+
+_schemaAuthorityRepoRoot: manifest.repos.frame.root
 
 #ReadOp: {
 	id!:        string
@@ -55,10 +59,9 @@ package cuerail
 		kind:      "git"
 		substrate: "mcp"
 		tool:      "git-mcp-server"
-		op:        "status"
+		op:        "git_status"
 		input: {
-			mode: "status"
-			root: "."
+			repo_path: _schemaAuthorityRepoRoot
 		}
 		readOnly: true
 	}]
@@ -77,12 +80,12 @@ package cuerail
 		kind:      "rg"
 		substrate: "mcp"
 		tool:      "mcp-ripgrep"
-		op:        "search"
+		op:        "advanced-search"
 		input: {
-			query:      "AGENTS.md"
-			root:       "."
-			mode:       "literal"
-			maxResults: 20
+			pattern:      "AGENTS.md"
+			path:         "."
+			fixedStrings: true
+			maxResults:   20
 		}
 		readOnly: true
 	}]
@@ -101,10 +104,9 @@ package cuerail
 		kind:      "git"
 		substrate: "mcp"
 		tool:      "git-mcp-server"
-		op:        "status"
+		op:        "git_status"
 		input: {
-			mode: "status"
-			root: "."
+			repo_path: _schemaAuthorityRepoRoot
 		}
 		readOnly: true
 	}, {
@@ -113,10 +115,9 @@ package cuerail
 		kind:      "git"
 		substrate: "mcp"
 		tool:      "git-mcp-server"
-		op:        "diff"
+		op:        "git_diff_unstaged"
 		input: {
-			mode: "diff"
-			root: "."
+			repo_path: _schemaAuthorityRepoRoot
 		}
 		readOnly: true
 	}]
