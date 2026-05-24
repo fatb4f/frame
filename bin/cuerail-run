@@ -30,10 +30,12 @@ CUERAIL_HOME="${CUERAIL_HOME:-$(resolve_source_home)}"
   die "missing executable bin/cuerail-token-usage"
 
 run_id=$(date -u '+%Y%m%dT%H%M%SZ')
-runlog=".cuerail/runs/$run_id.log"
-token_json=".cuerail/evidence/token-usage/latest.json"
+run_dir=".cuerail/runs/$run_id"
+runlog="$run_dir/codex.log"
+token_json="$run_dir/token-usage.json"
+latest_json=".cuerail/evidence/token-usage/latest.json"
 
-mkdir -p "${runlog%/*}" "${token_json%/*}"
+mkdir -p "$run_dir" "${latest_json%/*}"
 
 cmd=$(quote_arg codex)
 for arg do
@@ -43,9 +45,28 @@ done
 status=0
 script -q -e -f -c "$cmd" "$runlog" || status=$?
 
-"$CUERAIL_HOME/bin/cuerail-token-usage" \
-  --from-file "$runlog" \
-  --commit HEAD \
-  --output "$token_json" || true
+commit=
+if command -v git >/dev/null 2>&1; then
+  commit=$(git rev-parse HEAD 2>/dev/null || true)
+fi
+
+if [ -n "$commit" ]; then
+  "$CUERAIL_HOME/bin/cuerail-token-usage" \
+    --from-file "$runlog" \
+    --run-id "$run_id" \
+    --exit-code "$status" \
+    --source-kind codex-script-log \
+    --commit "$commit" \
+    --output "$token_json" || true
+else
+  "$CUERAIL_HOME/bin/cuerail-token-usage" \
+    --from-file "$runlog" \
+    --run-id "$run_id" \
+    --exit-code "$status" \
+    --source-kind codex-script-log \
+    --output "$token_json" || true
+fi
+
+cp "$token_json" "$latest_json" 2>/dev/null || true
 
 exit "$status"

@@ -133,7 +133,8 @@ line_stats_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-stats.XXXXXX.json")
 notes_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-notes.XXXXXX.json")
 git_evidence_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-git-evidence.XXXXXX.json")
 rg_evidence_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-rg-evidence.XXXXXX.json")
-trap 'rm -f "$changed_files_json" "$line_stats_json" "$notes_json" "$git_evidence_json" "$rg_evidence_json"' EXIT HUP INT TERM
+token_usage_evidence_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-review-token-usage.XXXXXX.json")
+trap 'rm -f "$changed_files_json" "$line_stats_json" "$notes_json" "$git_evidence_json" "$rg_evidence_json" "$token_usage_evidence_json"' EXIT HUP INT TERM
 
 git -C "$CUERAIL_HOME" diff-tree -z --root --no-commit-id --name-only -r "$commit_sha" |
   jq -R -s 'split("\u0000") | map(select(length > 0))' >"$changed_files_json"
@@ -196,7 +197,6 @@ else
 fi
 
 token_usage_available=false
-token_usage_status=unavailable
 token_usage_source=
 if [ -z "$token_usage_path" ] && [ -f ".cuerail/evidence/token-usage/latest.json" ]; then
   token_usage_path=".cuerail/evidence/token-usage/latest.json"
@@ -209,8 +209,9 @@ elif [ -n "$token_usage_path" ]; then
 fi
 
 if [ -n "$token_usage_path" ] && [ -f "$token_usage_path" ]; then
+  jq -e . "$token_usage_path" >"$token_usage_evidence_json" ||
+    die "invalid token usage evidence JSON: $token_usage_path"
   token_usage_available=true
-  token_usage_status=available
 fi
 
 collect_evidence_surface "$CUERAIL_CACHE/mcp/git-mcp-go/evidence/repos" "cuerail.git-mcp-go.capture.v1" "$git_evidence_json"
@@ -234,10 +235,10 @@ jq -n \
   --arg runtimeDoctor "$runtime_doctor_status" \
   --arg tokenUsagePath "$token_usage_path" \
   --arg tokenUsageAvailable "$token_usage_available" \
-  --arg tokenUsageStatus "$token_usage_status" \
   --arg tokenUsageSource "$token_usage_source" \
   --slurpfile gitEvidence "$git_evidence_json" \
   --slurpfile rgEvidence "$rg_evidence_json" \
+  --slurpfile tokenUsageEvidence "$token_usage_evidence_json" \
   --slurpfile notes "$notes_json" \
   '
   def source_kind($adapter):
@@ -286,10 +287,12 @@ jq -n \
     },
     tokenUsage: {
       available: ($tokenUsageAvailable == "true"),
-      status: $tokenUsageStatus,
       path: (if $tokenUsagePath == "" then null else $tokenUsagePath end),
       source: (if $tokenUsageSource == "" then null else $tokenUsageSource end)
-    },
+    } + (if ($tokenUsageAvailable == "true" and ($tokenUsageEvidence | length) > 0)
+      then {evidence: $tokenUsageEvidence[0]}
+      else {}
+      end),
     readSources: {
       git: $gitEvidence[0],
       rg: $rgEvidence[0]

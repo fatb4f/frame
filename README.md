@@ -166,8 +166,10 @@ uncaptured events do not consume sequence numbers
 
 `cuerail-run` is the outer runner for interactive Codex sessions that need a
 terminal-backed transcript. It runs `codex "$@"` under `script`, writes the
-session log under `.cuerail/runs/`, extracts token usage after Codex exits, and
-writes best-effort evidence to `.cuerail/evidence/token-usage/latest.json`.
+session log to `.cuerail/runs/<run-id>/codex.log`, extracts token usage after
+Codex exits, writes run-scoped evidence to
+`.cuerail/runs/<run-id>/token-usage.json`, and best-effort copies that evidence
+to `.cuerail/evidence/token-usage/latest.json`.
 
 `turn.cue` is static validation/projection CUE. It is not rewritten per event.
 

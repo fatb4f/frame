@@ -253,7 +253,11 @@ for fixture in "$CUERAIL_HOME"/test/fixtures/token-usage/*.txt; do
   [ -f "$fixture" ] || continue
 
   token_usage_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-token-usage.XXXXXX.json")
-  "$CUERAIL_HOME/bin/cuerail-token-usage" --from-file "$fixture" >"$token_usage_json"
+  "$CUERAIL_HOME/bin/cuerail-token-usage" \
+    --from-file "$fixture" \
+    --run-id "fixture-$(basename "$fixture" .txt)" \
+    --exit-code 0 \
+    >"$token_usage_json"
   jq -e . "$token_usage_json" >/dev/null
   (
     cd "$CUERAIL_HOME"
@@ -279,7 +283,6 @@ jq -e . "$review_packet_json" >/dev/null
 jq -e '
   .tokenUsage == {
     "available": false,
-    "status": "unavailable",
     "path": null,
     "source": null
   }
@@ -289,7 +292,11 @@ rm -f "$review_packet_json"
 review_packet_json=
 
 token_usage_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-token-usage.XXXXXX.json")
-"$CUERAIL_HOME/bin/cuerail-token-usage" --from-file "$CUERAIL_HOME/test/fixtures/token-usage/full.txt" >"$token_usage_json"
+"$CUERAIL_HOME/bin/cuerail-token-usage" \
+  --from-file "$CUERAIL_HOME/test/fixtures/token-usage/full.txt" \
+  --run-id fixture-full \
+  --exit-code 0 \
+  >"$token_usage_json"
 review_packet_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-review-packet.XXXXXX.json")
 CUERAIL_REVIEW_PACKET_SKIP_SOURCE_DOCTOR=1 "$CUERAIL_HOME/bin/cuerail-review-packet" --token-usage "$token_usage_json" >"$review_packet_json"
 jq -e . "$review_packet_json" >/dev/null
@@ -298,12 +305,12 @@ jq -e . "$review_packet_json" >/dev/null
   cue vet -c=false ./cue/runtime "$review_packet_json" -d '#ReviewPacket'
 ) || die "invalid review packet output with token usage reference"
 jq -e --arg path "$token_usage_json" '
-  .tokenUsage == {
-    "available": true,
-    "status": "available",
-    "path": $path,
-    "source": "explicit"
-  }
+  .tokenUsage.available == true and
+  .tokenUsage.path == $path and
+  .tokenUsage.source == "explicit" and
+  .tokenUsage.evidence.schemaVersion == "cuerail.tokenUsageEvidence.v2" and
+  .tokenUsage.evidence.usage.total == 101019 and
+  .tokenUsage.evidence.observed.line == "Token usage: total=101,019 input=95,648 (+ 482,304 cached) output=5,371 (reasoning 1,620)"
 ' "$review_packet_json" >/dev/null ||
   die "invalid available review packet token usage reference"
 rm -f "$token_usage_json" "$review_packet_json"
@@ -313,7 +320,11 @@ review_packet_json=
 review_auto_dir="$doctor_fixture_state/review-auto"
 mkdir -p "$review_auto_dir/.cuerail/evidence/token-usage"
 token_usage_json="$review_auto_dir/.cuerail/evidence/token-usage/latest.json"
-"$CUERAIL_HOME/bin/cuerail-token-usage" --from-file "$CUERAIL_HOME/test/fixtures/token-usage/full.txt" >"$token_usage_json"
+"$CUERAIL_HOME/bin/cuerail-token-usage" \
+  --from-file "$CUERAIL_HOME/test/fixtures/token-usage/full.txt" \
+  --run-id fixture-full \
+  --exit-code 0 \
+  >"$token_usage_json"
 review_packet_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-review-packet.XXXXXX.json")
 (
   cd "$review_auto_dir"
@@ -325,12 +336,11 @@ jq -e . "$review_packet_json" >/dev/null
   cue vet -c=false ./cue/runtime "$review_packet_json" -d '#ReviewPacket'
 ) || die "invalid review packet output with auto token usage reference"
 jq -e '
-  .tokenUsage == {
-    "available": true,
-    "status": "available",
-    "path": ".cuerail/evidence/token-usage/latest.json",
-    "source": "auto"
-  } and
+  .tokenUsage.available == true and
+  .tokenUsage.path == ".cuerail/evidence/token-usage/latest.json" and
+  .tokenUsage.source == "auto" and
+  .tokenUsage.evidence.schemaVersion == "cuerail.tokenUsageEvidence.v2" and
+  .tokenUsage.evidence.usage.total == 101019 and
   (.notes | index("token usage evidence auto-discovered from latest.json") != null)
 ' "$review_packet_json" >/dev/null ||
   die "invalid auto review packet token usage reference"

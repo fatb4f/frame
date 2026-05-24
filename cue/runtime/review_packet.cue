@@ -1,7 +1,6 @@
 package cuerail
 
 #ReviewCheckStatus:      "ok" | "failed" | "skipped"
-#ReviewTokenUsageStatus: "available" | "unavailable"
 #ReviewTokenUsageSource: "explicit" | "auto"
 #ReviewEvidenceState:    "green" | "yellow" | "red"
 
@@ -47,9 +46,18 @@ package cuerail
 
 	tokenUsage: {
 		available: bool
-		status:    #ReviewTokenUsageStatus
 		path:      null | string
 		source:    null | #ReviewTokenUsageSource
+		evidence?: #TokenUsageEvidence
+
+		if available == true {
+			path:     string
+			evidence: #TokenUsageEvidence
+		}
+
+		if available == false {
+			path: null
+		}
 	}
 
 	readSources: {
