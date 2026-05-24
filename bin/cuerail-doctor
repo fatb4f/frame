@@ -190,6 +190,7 @@ CUERAIL_HOME="${CUERAIL_HOME:-$(resolve_source_home)}"
 [ -x "$CUERAIL_HOME/bin/cuerail-review-packet" ] || die "missing executable bin/cuerail-review-packet"
 [ -x "$CUERAIL_HOME/bin/cuerail-schema-sync" ] || die "missing executable bin/cuerail-schema-sync"
 [ -x "$CUERAIL_HOME/bin/cuerail-token-usage" ] || die "missing executable bin/cuerail-token-usage"
+[ -x "$CUERAIL_HOME/bin/cuerail-run" ] || die "missing executable bin/cuerail-run"
 [ -x "$CUERAIL_HOME/bin/cuerail-adapter-export" ] || die "missing executable bin/cuerail-adapter-export"
 [ -x "$CUERAIL_HOME/bin/cuerail-mcp-ripgrep" ] || die "missing executable bin/cuerail-mcp-ripgrep"
 [ -x "$CUERAIL_HOME/bin/cuerail-mcp-capture" ] || die "missing executable bin/cuerail-mcp-capture"
@@ -257,8 +258,13 @@ for fixture in "$CUERAIL_HOME"/test/fixtures/token-usage/*.txt; do
   token_usage_json=
 done
 
+review_empty_dir="$doctor_fixture_state/review-empty"
+mkdir -p "$review_empty_dir"
 review_packet_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-review-packet.XXXXXX.json")
-CUERAIL_REVIEW_PACKET_SKIP_SOURCE_DOCTOR=1 "$CUERAIL_HOME/bin/cuerail-review-packet" >"$review_packet_json"
+(
+  cd "$review_empty_dir"
+  CUERAIL_HOME="$CUERAIL_HOME" CUERAIL_REVIEW_PACKET_SKIP_SOURCE_DOCTOR=1 "$CUERAIL_HOME/bin/cuerail-review-packet"
+) >"$review_packet_json"
 jq -e . "$review_packet_json" >/dev/null
 (
   cd "$CUERAIL_HOME"
@@ -268,7 +274,8 @@ jq -e '
   .tokenUsage == {
     "available": false,
     "status": "unavailable",
-    "path": null
+    "path": null,
+    "source": null
   }
 ' "$review_packet_json" >/dev/null ||
   die "invalid default review packet token usage reference"
@@ -288,10 +295,39 @@ jq -e --arg path "$token_usage_json" '
   .tokenUsage == {
     "available": true,
     "status": "available",
-    "path": $path
+    "path": $path,
+    "source": "explicit"
   }
 ' "$review_packet_json" >/dev/null ||
   die "invalid available review packet token usage reference"
+rm -f "$token_usage_json" "$review_packet_json"
+token_usage_json=
+review_packet_json=
+
+review_auto_dir="$doctor_fixture_state/review-auto"
+mkdir -p "$review_auto_dir/.cuerail/evidence/token-usage"
+token_usage_json="$review_auto_dir/.cuerail/evidence/token-usage/latest.json"
+"$CUERAIL_HOME/bin/cuerail-token-usage" --from-file "$CUERAIL_HOME/test/fixtures/token-usage/full.txt" >"$token_usage_json"
+review_packet_json=$(mktemp "${TMPDIR:-/tmp}/cuerail-doctor-review-packet.XXXXXX.json")
+(
+  cd "$review_auto_dir"
+  CUERAIL_HOME="$CUERAIL_HOME" CUERAIL_REVIEW_PACKET_SKIP_SOURCE_DOCTOR=1 "$CUERAIL_HOME/bin/cuerail-review-packet"
+) >"$review_packet_json"
+jq -e . "$review_packet_json" >/dev/null
+(
+  cd "$CUERAIL_HOME"
+  cue vet -c=false ./cue/runtime "$review_packet_json" -d '#ReviewPacket'
+) || die "invalid review packet output with auto token usage reference"
+jq -e '
+  .tokenUsage == {
+    "available": true,
+    "status": "available",
+    "path": ".cuerail/evidence/token-usage/latest.json",
+    "source": "auto"
+  } and
+  (.notes | index("token usage evidence auto-discovered from latest.json") != null)
+' "$review_packet_json" >/dev/null ||
+  die "invalid auto review packet token usage reference"
 rm -f "$token_usage_json" "$review_packet_json"
 token_usage_json=
 review_packet_json=

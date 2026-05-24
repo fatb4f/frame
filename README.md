@@ -47,6 +47,7 @@ $CODEX_HOME/tools/cuerail/
     cuerail-hook
     cuerail-doctor
     cuerail-schema-sync
+    cuerail-run
 
   cue.mod/
     module.cue
@@ -159,6 +160,13 @@ validate temp manifest
 rename temp manifest atomically
 uncaptured events do not consume sequence numbers
 ```
+
+## PTY run capture
+
+`cuerail-run` is the outer runner for interactive Codex sessions that need a
+terminal-backed transcript. It runs `codex "$@"` under `script`, writes the
+session log under `.cuerail/runs/`, extracts token usage after Codex exits, and
+writes best-effort evidence to `.cuerail/evidence/token-usage/latest.json`.
 
 `turn.cue` is static validation/projection CUE. It is not rewritten per event.
 

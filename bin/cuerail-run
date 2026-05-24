@@ -1,0 +1,51 @@
+#!/usr/bin/env sh
+set -eu
+
+die() {
+  printf 'cuerail-run: %s\n' "$1" >&2
+  exit 1
+}
+
+resolve_source_home() {
+  case "$0" in
+    */*) script_dir=${0%/*} ;;
+    *)
+      script_path=$(command -v "$0") || die "cannot locate script"
+      script_dir=${script_path%/*}
+      ;;
+  esac
+
+  cd "$script_dir/.." 2>/dev/null && pwd -P
+}
+
+quote_arg() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+command -v script >/dev/null 2>&1 || die "missing required command: script"
+command -v codex >/dev/null 2>&1 || die "missing required command: codex"
+
+CUERAIL_HOME="${CUERAIL_HOME:-$(resolve_source_home)}"
+[ -x "$CUERAIL_HOME/bin/cuerail-token-usage" ] ||
+  die "missing executable bin/cuerail-token-usage"
+
+run_id=$(date -u '+%Y%m%dT%H%M%SZ')
+runlog=".cuerail/runs/$run_id.log"
+token_json=".cuerail/evidence/token-usage/latest.json"
+
+mkdir -p "${runlog%/*}" "${token_json%/*}"
+
+cmd=$(quote_arg codex)
+for arg do
+  cmd="$cmd $(quote_arg "$arg")"
+done
+
+status=0
+script -q -e -f -c "$cmd" "$runlog" || status=$?
+
+"$CUERAIL_HOME/bin/cuerail-token-usage" \
+  --from-file "$runlog" \
+  --commit HEAD \
+  --output "$token_json" || true
+
+exit "$status"

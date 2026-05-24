@@ -2,6 +2,7 @@ package cuerail
 
 #ReviewCheckStatus: "ok" | "failed" | "skipped"
 #ReviewTokenUsageStatus: "available" | "unavailable"
+#ReviewTokenUsageSource: "explicit" | "auto"
 
 #ReviewPacket: {
 	commit:  =~"^[0-9a-f]{40}$"
@@ -35,6 +36,7 @@ package cuerail
 		available: bool
 		status:    #ReviewTokenUsageStatus
 		path:      null | string
+		source:    null | #ReviewTokenUsageSource
 	}
 
 	notes: [...string]

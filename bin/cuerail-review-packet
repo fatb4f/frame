@@ -139,6 +139,17 @@ fi
 
 token_usage_available=false
 token_usage_status=unavailable
+token_usage_source=
+if [ -z "$token_usage_path" ] && [ -f ".cuerail/evidence/token-usage/latest.json" ]; then
+  token_usage_path=".cuerail/evidence/token-usage/latest.json"
+  token_usage_source=auto
+  notes_json_tmp=$notes_json.tmp
+  jq '. + ["token usage evidence auto-discovered from latest.json"]' "$notes_json" >"$notes_json_tmp"
+  mv "$notes_json_tmp" "$notes_json"
+elif [ -n "$token_usage_path" ]; then
+  token_usage_source=explicit
+fi
+
 if [ -n "$token_usage_path" ] && [ -f "$token_usage_path" ]; then
   token_usage_available=true
   token_usage_status=available
@@ -157,6 +168,7 @@ jq -n \
   --arg tokenUsagePath "$token_usage_path" \
   --arg tokenUsageAvailable "$token_usage_available" \
   --arg tokenUsageStatus "$token_usage_status" \
+  --arg tokenUsageSource "$token_usage_source" \
   --slurpfile notes "$notes_json" \
   '{
     commit: $commit,
@@ -181,7 +193,8 @@ jq -n \
     tokenUsage: {
       available: ($tokenUsageAvailable == "true"),
       status: $tokenUsageStatus,
-      path: (if $tokenUsagePath == "" then null else $tokenUsagePath end)
+      path: (if $tokenUsagePath == "" then null else $tokenUsagePath end),
+      source: (if $tokenUsageSource == "" then null else $tokenUsageSource end)
     },
     notes: $notes[0]
   }'
