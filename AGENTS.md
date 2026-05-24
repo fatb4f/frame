@@ -1,113 +1,299 @@
-# cuerail Agent Contract
+# Codex Repo Contract
 
-This repository defines `cuerail`: a CUE-managed side rail over Codex's native
-hook event stream.
+This repository exists to make repo awareness explicit, typed, bounded, and
+CUE-governed for Codex turns.
 
-For work in this repository, treat CUE as the authority. Do not infer hook
-schemas from prose. The official OpenAI/Codex generated hook schemas are the
-upstream source, currently expected at:
+The current active surface is Cuerails, not the earlier `workflows/frame`
+surface.
 
-```txt
-/home/_404/src/fatb4f/tmp/codex-schemas/hooks/schema/generated/
-```
+## Active Surface
 
-## Default workflow
-
-1. Preserve the runtime boundary:
-
-   ```txt
-   Codex hook JSON
-   -> cuerail-hook
-   -> CUE #HookManifest
-   -> event-valid Codex hook output
-   -> optional persisted CUE manifest
-   ```
-
-2. Do not implement collectors, Python dispatch, derived telemetry, or
-   classification in slice 1.
-
-3. After changing CUE schemas or docs, run:
-
-   ```sh
-   cue vet ./cue
-   cue export ./cue -e '#ExampleHookManifest'
-   cue export ./cue -e '#ExampleTurn'
-   ```
-
-4. After changing shell transport scripts, run:
-
-   ```sh
-   sh -n bin/cuerail-hook bin/cuerail-doctor
-   ```
-
-5. After contract refactors, run the old-name sweep:
-
-   ```sh
-   rg 'frame|repo-frame|repo-rg|repo-git|noMCP|FRAME_HOME|frame-codex-hook|frame-doctor' .
-   ```
-
-   Every remaining hit must be superseded history, a migration note, or an
-   explicit old-name compatibility reference. No remaining hit may be active
-   contract text.
-
-## Runtime boundaries
-
-- `cuerail` is installed globally under `$CODEX_HOME/tools/cuerail`.
-- `CODEX_HOME` and `CODEX_STATE` are required runtime environment variables.
-- `CUERAIL_HOME`, `CUERAIL_STATE`, and `CUERAIL_TURNS` are derived values.
-- Runtime execution must not depend on the development checkout path.
-- `cuerail-hook` is shell transport only: read stdin, wrap input, call `cue`,
-  print CUE-selected output, and persist CUE-selected manifests atomically.
-- CUE owns validity, output shape, capture policy, and manifest structure.
-
-## MCP evidence capture
-
-`cuerail` does not govern all MCP usage. It governs what MCP evidence becomes
-persisted turn evidence.
-
-MCP evidence capture is allowlisted only for:
+Use the current Cuerail tools and schemas:
 
 ```txt
-mcp-ripgrep
-git-mcp-server
+cuerail/bin/cuerail-hook
+cuerail/bin/cuerail-doctor
+cuerail/bin/cuerail-schema-sync
+cuerail/bin/repo-git
+cuerail/bin/repo-rg
+cue/runtime/*
+fixtures/*
 ```
 
-Persist initially:
+`repo-git` and `repo-rg` are allowed interim local adapters until the target MCP
+servers are running:
+
+```txt
+repo-git       -> interim adapter for git observations
+repo-rg        -> interim adapter for bounded ripgrep observations
+
+git-mcp-server -> target git observation surface
+mcp-ripgrep    -> target bounded search surface
+```
+
+## Inactive / Legacy Surface
+
+Do not use `workflows/frame` as the active bootstrap path.
+
+```txt
+workflows/frame/
+workflows/frame/bin/repo-frame
+workflows/frame/cue/#ContextFrame
+workflows/frame/skills/*
+```
+
+These belong to the earlier Cuerails model and may remain only as historical
+reference until pruned.
+
+Do not run:
+
+```sh
+./workflows/frame/bin/repo-frame . "$USER_GOAL"
+repo-frame . "$USER_GOAL"
+```
+
+There is no current durable frame runtime and no active `#ContextFrame` contract.
+
+## Turn Start Contract
+
+At the start of repo-aware work, prefer bounded local inspection through the
+current Cuerail adapter surface.
+
+Set the repo-local tool path explicitly:
+
+```sh
+PATH="$PWD/cuerail/bin:$PATH"
+```
+
+Check repository state:
+
+```sh
+repo-git status --short
+repo-git diff --stat
+```
+
+For exact code, symbols, config keys, filenames, or strings, use bounded search:
+
+```sh
+repo-rg 'literal text' literal 80
+repo-rg 'regex_pattern' regex 80
+```
+
+Use direct shell tools only when the Cuerail adapter surface does not yet expose
+the required observation.
+
+## Hook / Manifest Contract
+
+CUE is the authority for hook manifest shape and capture policy.
+
+Current active hook manifest surface:
+
+```txt
+cue/runtime/hook_manifest.cue
+#HookManifest
+#HookManifest.capture.persist
+```
+
+Persist only the CUE-approved hook events:
 
 ```txt
 UserPromptSubmit
 Stop
-PostToolUse where tool_name is allowlisted for git/rg MCP evidence capture
+PostToolUse where tool_name == mcp-ripgrep
+PostToolUse where tool_name == git-mcp-server
 ```
 
-Do not persist unrelated hook events unless a later contract expands the capture
-policy.
+Do not move capture policy into shell.
 
-## Design constraints
-
-- Do not create fake hook event names.
-- Do not add a Python-owned adapter in slice 1.
-- Do not add hook-owned git/rg collectors in slice 1.
-- Do not add derived telemetry schemas in slice 1.
-- Do not emit generic hook output that permits fields rejected by the official
-  event schema.
-- Do not let shell construct semantic output; shell is transport and safety
-  fallback only.
-- Keep the project deletable: every new file must support official schema
-  internalization, CUE validation/projection, capture policy, hook transport,
-  doctor gates, or turn artifact validation.
-
-## Superseded names
-
-The following belong only in migration history or explicit compatibility notes:
+Shell scripts are adapters only. They may:
 
 ```txt
-frame
-repo-frame
-repo-rg
-repo-git
-noMCP
-FRAME_HOME
-frame-codex-hook
-frame-doctor
+read hook input
+invoke CUE
+derive paths
+acquire locks
+write temp files
+validate manifests
+rename atomically
 ```
+
+Shell scripts must not become policy authorities.
+
+## Validation Contract
+
+After changing CUE schemas, hook behavior, schema-sync behavior, or adapter
+wiring, run:
+
+```sh
+PATH="$PWD/cuerail/bin:$PATH" sh -n cuerail/bin/*
+```
+
+Run schema validation:
+
+```sh
+CODEX_HOME="${CODEX_HOME:-$HOME/.local/share/codex}" \
+CODEX_STATE="${CODEX_STATE:-$HOME/.local/state/codex}" \
+PATH="$PWD/cuerail/bin:$PATH" \
+cuerail-schema-sync --check
+```
+
+Run the doctor:
+
+```sh
+CODEX_HOME="${CODEX_HOME:-$HOME/.local/share/codex}" \
+CODEX_STATE="${CODEX_STATE:-$HOME/.local/state/codex}" \
+PATH="$PWD/cuerail/bin:$PATH" \
+cuerail-doctor
+```
+
+If changing CUE directly, also run the narrow CUE checks already used by the
+current slice. Prefer existing repo-local validation commands over inventing new
+ones.
+
+## Plan And Gate Contract
+
+Do not extend Codex's native `update_plan` schema. Treat it as the human-visible
+status rail only:
+
+```txt
+step text
+pending | in_progress | completed
+```
+
+Do not parse `PlanDelta` streaming text as canonical. The completed native plan
+item is the only native plan text worth binding to.
+
+Do not add dynamic tools, daemons, new runtime tool registries, or MCP
+dependencies for plan validation.
+
+For future semantic plan validation, use this side-rail shape:
+
+```txt
+normalize native plan
+-> bind sidecar to native step identity
+-> validate sidecar with CUE
+-> run evals/tests through stable adapters
+-> validate evidence with CUE
+```
+
+Native plan identity should be bound by stable fields such as:
+
+```txt
+turn id
+step ordinal
+completed step text
+text hash
+```
+
+The sidecar owns semantic fields:
+
+```txt
+reads
+writes
+symbols
+protected impact
+gates
+required evidence
+```
+
+This is future-facing unless the repo contains an explicit current CUE schema and
+doctor gate for it.
+
+## Skill Routing
+
+Use repo-local skills only as routing hints, not as independent authority.
+
+Current preferred routing:
+
+```txt
+CUE work:
+  inspect cue/runtime and current schema-sync/doctor fixtures
+
+Git evidence:
+  use cuerail/bin/repo-git as interim adapter
+
+Search evidence:
+  use cuerail/bin/repo-rg as interim adapter
+
+Hook behavior:
+  use cuerail-hook, cuerail-doctor, fixtures, and #HookManifest
+```
+
+Do not route current work through:
+
+```txt
+workflows/frame/skills/SKILL.md
+workflows/frame/bin/repo-frame
+#ContextFrame
+```
+
+## Boundaries
+
+CUE is the authority plane for:
+
+```txt
+state shape
+validation
+selectors
+capture policy
+projections
+examples
+```
+
+Shell is the adapter plane for:
+
+```txt
+filesystem mechanics
+process execution
+tool invocation
+locking
+atomic writes
+smoke checks
+```
+
+Do not add:
+
+```txt
+agent loop
+planner framework
+Go runtime
+Python runtime
+broad framework layer
+durable frame runtime
+new MCP dependency before the adapter path is ready
+```
+
+Keep observations bounded to the current repository. Do not search `$HOME` or
+`/`.
+
+Keep the project deletable: every new file must support one of:
+
+```txt
+state
+validation
+adapter behavior
+fixture coverage
+repo-local skill routing
+single-turn context contract
+```
+
+## Pruning Rule
+
+`workflows/frame` may be pruned once its useful adapter pieces have been moved
+into the active Cuerail surface.
+
+Before pruning, confirm no active docs or scripts require:
+
+```txt
+workflows/frame/bin/repo-frame
+workflows/frame/cue/#ContextFrame
+workflows/frame/skills/*
+```
+
+It is acceptable for `repo-git` and `repo-rg` to survive under:
+
+```txt
+cuerail/bin/
+```
+
+as interim adapters.
